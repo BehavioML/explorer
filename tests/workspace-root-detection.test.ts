@@ -7,7 +7,10 @@ import { extractArchiveBytes } from '../src/adapters/browser';
 
 test('normalizes workspace paths to POSIX-style relative paths', () => {
   assert.equal(normalizeWorkspacePath('./roles\\admin.yaml'), 'roles/admin.yaml');
-  assert.equal(normalizeWorkspacePath('/behavioml//workflows/main.yaml'), 'behavioml/workflows/main.yaml');
+  assert.equal(
+    normalizeWorkspacePath('/behavioml//workflows/main.yaml'),
+    'behavioml/workflows/main.yaml',
+  );
 });
 
 test('rejects path traversal while normalizing workspace paths', () => {
@@ -53,6 +56,104 @@ test('detects a conventional BehavioML model root under behavioml/model', () => 
   assert.deepEqual(
     result.files.map((file) => file.path),
     ['roles/user.yaml'],
+  );
+});
+
+test('detects a non-wrapped feature-local BehavioML draft model root', () => {
+  const result = detectWorkspaceRoot([
+    {
+      path: 'specs/001-model-explorer/behavioml-draft/model/capabilities/artifacts/show_generated_artifact.yaml',
+      content: 'id: show_generated_artifact',
+    },
+    { path: 'specs/001-model-explorer/behavioml-draft/README.md', content: 'ignored' },
+  ]);
+
+  assert.equal(result.rootPath, 'specs/001-model-explorer/behavioml-draft/model/');
+  assert.deepEqual(
+    result.files.map((file) => file.path),
+    ['capabilities/artifacts/show_generated_artifact.yaml'],
+  );
+});
+
+test('detects a GitHub ZIP wrapper with a model root at the wrapper root', () => {
+  const result = detectWorkspaceRoot([
+    { path: 'explorer-main/README.md', content: 'ignored' },
+    { path: 'explorer-main/roles/user.yaml', content: 'id: user' },
+  ]);
+
+  assert.equal(result.rootPath, 'explorer-main/');
+  assert.deepEqual(
+    result.files.map((file) => file.path),
+    ['README.md', 'roles/user.yaml'],
+  );
+});
+
+test('detects a GitHub ZIP wrapper with a model root under behavioml', () => {
+  const result = detectWorkspaceRoot([
+    { path: 'explorer-main/README.md', content: 'ignored' },
+    { path: 'explorer-main/behavioml/roles/user.yaml', content: 'id: user' },
+  ]);
+
+  assert.equal(result.rootPath, 'explorer-main/behavioml/');
+  assert.deepEqual(
+    result.files.map((file) => file.path),
+    ['roles/user.yaml'],
+  );
+});
+
+test('detects a GitHub ZIP wrapper with a model root under behavioml/model', () => {
+  const result = detectWorkspaceRoot([
+    { path: 'explorer-main/README.md', content: 'ignored' },
+    { path: 'explorer-main/behavioml/model/roles/user.yaml', content: 'id: user' },
+  ]);
+
+  assert.equal(result.rootPath, 'explorer-main/behavioml/model/');
+  assert.deepEqual(
+    result.files.map((file) => file.path),
+    ['roles/user.yaml'],
+  );
+});
+
+test('detects a GitHub ZIP wrapper with a feature-local BehavioML draft model root', () => {
+  const result = detectWorkspaceRoot([
+    { path: 'explorer-main/.github/workflows/ci.yml', content: 'name: CI' },
+    {
+      path: 'explorer-main/specs/001-model-explorer/behavioml-draft/model/capabilities/artifacts/show_generated_artifact.yaml',
+      content: 'id: show_generated_artifact',
+    },
+  ]);
+
+  assert.equal(result.rootPath, 'explorer-main/specs/001-model-explorer/behavioml-draft/model/');
+  assert.deepEqual(
+    result.files.map((file) => file.path),
+    ['capabilities/artifacts/show_generated_artifact.yaml'],
+  );
+});
+
+test('does not treat .github/workflows as a BehavioML model root', () => {
+  assert.throws(
+    () =>
+      detectWorkspaceRoot([
+        { path: '.github/workflows/ci.yml', content: 'name: CI' },
+      ]),
+    (error) => error instanceof ApplicationError && error.kind === 'workspace_root_not_found',
+  );
+});
+
+test('reports ambiguous multiple populated feature-local BehavioML draft roots', () => {
+  assert.throws(
+    () =>
+      detectWorkspaceRoot([
+        {
+          path: 'specs/001-alpha/behavioml-draft/model/roles/user.yaml',
+          content: 'id: user',
+        },
+        {
+          path: 'specs/002-beta/behavioml-draft/model/roles/admin.yaml',
+          content: 'id: admin',
+        },
+      ]),
+    (error) => error instanceof ApplicationError && error.kind === 'workspace_root_ambiguous',
   );
 });
 
@@ -108,6 +209,24 @@ test('extracts a .zip archive with model files under behavioml/model', async () 
   assert.deepEqual(result.files, [
     { path: 'roles/user.yaml', content: 'description: User role.\n' },
     { path: 'components/service.yml', content: 'description: Service component.\n' },
+  ]);
+});
+
+test('extracts a GitHub-style .zip archive with validation files relative to the feature draft root', async () => {
+  const archiveBytes = createZip({
+    'explorer-main/specs/001-model-explorer/behavioml-draft/model/capabilities/artifacts/show_generated_artifact.yaml':
+      'id: show_generated_artifact\n',
+    'explorer-main/.github/workflows/ci.yml': 'name: CI\n',
+  });
+
+  const result = await extractArchiveBytes(archiveBytes, 'explorer-main.zip');
+
+  assert.equal(result.modelRoot, 'explorer-main/specs/001-model-explorer/behavioml-draft/model/');
+  assert.deepEqual(result.files, [
+    {
+      path: 'capabilities/artifacts/show_generated_artifact.yaml',
+      content: 'id: show_generated_artifact\n',
+    },
   ]);
 });
 

@@ -66,19 +66,25 @@ are returned separately from Validator diagnostics so the UI can distinguish
 
 ## Validator dependency status
 
-`@behavioml/validator` was checked against the public npm registry during this
-scaffold work and was not published there. The Explorer therefore declares it as
-an optional peer dependency and keeps the import deferred inside the validator
-adapter. This keeps the scaffold buildable while making the integration blocker
-explicit instead of silently faking Validator behavior.
+`@behavioml/validator` is not currently published to the public npm registry, so
+Explorer does not use a registry semver dependency or pretend that package is
+available from npm. For local development and CI, Explorer consumes the Validator
+repository directly as a pinned Git dependency:
 
-Future integration options include:
+```json
+"@behavioml/validator": "git+https://github.com/BehavioML/validator.git#be6814f169c0e46245394956fbe21548233b2797"
+```
 
-- publish `@behavioml/validator` to npm;
-- consume it through a local workspace once repository layout supports that;
-- consume a pinned GitHub dependency if browser bundling compatibility is
-  confirmed; or
-- split the Validator into browser-safe core and CLI/filesystem packages.
+The pinned commit is the current `main` revision inspected for this integration.
+It includes the public package metadata and workspace-provider API expected by
+the adapter: `InMemoryWorkspace` and `validateWorkspace`. Pinning a commit keeps
+Explorer installs reproducible while Validator remains unpublished; updating the
+pin should be a deliberate dependency-integration change.
+
+The import remains deferred inside `src/adapters/validator/` so the React app and
+core layers continue to avoid direct Validator coupling. This dependency should
+be switched to a normal npm semver range once `@behavioml/validator` is published
+to the registry.
 
 ## Running the scaffold
 

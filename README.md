@@ -3,12 +3,12 @@
 This repository is the future home of the BehavioML Model Explorer: a web-based,
 read-only semantic navigation and review tool for BehavioML workspaces.
 
-The current implementation is an initial Vite + React + TypeScript vertical
-slice. It establishes application boundaries and supports uploaded archive
-validation, a path-based workspace overview, a minimal path-derived entity
-browser, diagnostic navigation, and a raw read-only selected-entity source view
-without implementing the full Explorer product, remote fetching, or
-Explorer-owned BehavioML semantics.
+The current implementation is a Vite + React + TypeScript workbench slice. It
+establishes application boundaries and supports uploaded archive validation, a
+path-based workspace overview, a scope-oriented entity explorer, diagnostic
+navigation, local search, workspace tabs, and a raw read-only selected-entity
+source view without implementing remote fetching or Explorer-owned BehavioML
+semantics.
 
 ## Current status
 
@@ -29,9 +29,14 @@ Implemented in this first vertical slice:
   BehavioML scope directories.
 - Validator integration boundary under `src/adapters/validator/`, with the
   Validator package isolated to that adapter.
-- Minimal React UI under `src/ui-react/` for archive selection, loading state,
-  workspace overview, grouped path-derived entity browsing, selected entity
-  summaries, local text/path search, raw read-only source display, selected-file
+- React workbench UI under `src/ui-react/` with a compact top bar, left activity
+  bar, scope-oriented explorer panel, tabbed central workspace, contextual
+  inspector, and bottom diagnostics panel.
+- Default workspace tabs for Overview, Source, and a Diagram placeholder. The
+  Source tab reuses the raw read-only source viewer; the Diagram tab reserves the
+  future diagram surface without rendering or generating diagrams.
+- Archive selection, loading state, workspace overview, grouped path-derived
+  entity browsing, selected entity summaries, local text/path search, selected-file
   diagnostics, validation status, diagnostic counts, diagnostic details, exact-path
   diagnostic navigation, selected diagnostic source context, selected source search
   context, and adapter errors.
@@ -47,9 +52,45 @@ Deferred intentionally:
 - Generated artifact discovery, supporting artifact discovery, and diagram
   rendering.
 - Editing.
-- Full Explorer UI.
+- Diagram rendering.
 - Any Explorer-owned BehavioML parser, resolver, validator, or diagnostics
   semantics.
+
+## Workbench layout
+
+The default UI is a read-only Explorer workbench rather than a stacked report. It
+uses persistent navigation and internal scrolling so source, diagnostics, and
+selection context remain visible while users explore a loaded workspace.
+
+The workbench shell contains:
+
+- A compact top bar with the BehavioML Explorer identity, loaded model root or
+  load state, validation health, global search entry point, and archive load
+  action.
+- A narrow activity bar reserving major work modes: Explorer, Search, Validation,
+  Diagrams, and Relationships. Explorer is the primary functional mode in this
+  slice; the other modes either expose already-available search/validation context
+  or intentional placeholders for future work.
+- A scope-oriented Explorer panel that groups path-derived entities under known
+  BehavioML model scopes and shows counts for each scope.
+- A tabbed central workspace with Overview, Source, and Diagram tabs. The
+  Overview tab opens after a successful load and summarizes workspace identity,
+  detected root, scope counts, validation health, and entry points. The Source
+  tab shows the existing raw read-only source viewer for the selected entity. The
+  Diagram tab is a placeholder only.
+- A compact Inspector panel for selected entity identity, scope, file path,
+  extension, selected diagnostic/search context, and diagnostics for the selected
+  source file.
+- A bottom Diagnostics panel modeled after an IDE Problems panel, with validation
+  state, severity summaries, and clickable diagnostics when exact path-based
+  navigation is available.
+
+Diagram rendering remains future work. Explorer does not generate diagrams, infer
+relationships, resolve references, compute backlinks, edit models, or parse YAML
+semantically in this UI slice.
+
+For comparison or troubleshooting, the previous stacked layout remains available
+with `?layout=classic`.
 
 
 ## Uploaded archive support

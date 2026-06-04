@@ -46,6 +46,7 @@ Examples:
 - interactive tools;
 - protocol specifications;
 - service architectures;
+- validator integration;
 - compliance-oriented systems.
 
 They own:

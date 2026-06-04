@@ -114,6 +114,8 @@ These paths are planning guidance, not final implementation tasks.
 
 The Explorer should embed and reuse the BehavioML Validator as its semantic engine.
 
+Explorer validator integration should follow the reusable `prompts/profiles/validator-integration.prompt.md` profile and remain behind an adapter boundary.
+
 The Validator should remain the source of truth for:
 
 - workspace parsing;

@@ -20,7 +20,7 @@ Implemented in this first vertical slice:
   view models, path-based workspace overview models, path-derived entity index
   and selection helpers, raw source file view models, application errors, and
   command/port boundaries.
-- Browser-only uploaded `.tgz` / `.tar.gz` archive extraction under
+- Browser-only uploaded `.tgz`, `.tar.gz`, and `.zip` archive extraction under
   `src/adapters/browser/`.
 - Minimal workspace root detection for model roots at the archive root or under
   `behavioml/`, based on known BehavioML scope directories.
@@ -49,11 +49,12 @@ Deferred intentionally:
 
 ## Uploaded archive support
 
-The first vertical slice accepts an uploaded `.tgz` or `.tar.gz` file in the
-browser UI. The browser adapter decompresses the gzip payload, reads regular tar
-entries, keeps UTF-8 `.yaml`, `.yml`, and `.json` files relevant for validation,
-normalizes paths to POSIX-style workspace-relative paths, detects the model root,
-and passes in-memory file entries to the Validator adapter.
+The first vertical slice accepts uploaded `.tgz`, `.tar.gz`, and `.zip` files in
+the browser UI. The browser adapter decompresses gzip-compressed tar archives or
+unzips ZIP archives, reads regular archive entries, keeps UTF-8 `.yaml`, `.yml`,
+and `.json` files relevant for validation, normalizes paths to POSIX-style
+workspace-relative paths, detects the model root, and passes in-memory file
+entries to the Validator adapter.
 
 Supported model root layouts for this slice:
 
@@ -86,10 +87,11 @@ If no root is found, or both supported roots are plausible, Explorer reports a
 clear adapter error instead of guessing.
 
 Archive extraction uses [`fflate`](https://www.npmjs.com/package/fflate) for
-gzip decompression. It was selected because it is small, browser-compatible, and
-focused on compression/decompression. Explorer keeps tar entry reading local to
-the browser adapter so no extraction behavior leaks into `src/core/` or the
-Validator adapter. The build also aliases the Validator package's Node
+gzip decompression and ZIP extraction. It was selected because it is small,
+browser-compatible, and focused on compression/decompression. Explorer keeps tar
+entry reading and ZIP extraction local to the browser adapter so no extraction
+behavior leaks into `src/core/` or the Validator adapter. Remote archive URL
+loading remains deferred. The build also aliases the Validator package's Node
 filesystem dependency to a browser-only unavailable-filesystem shim; Explorer
 uses the Validator through its in-memory workspace path and does not ask the
 browser to read local filesystem paths.
@@ -161,8 +163,9 @@ src/core/
   Framework-independent application contracts and view-model types.
 
 src/adapters/browser/
-  Browser-specific archive upload and extraction boundaries. Uploaded `.tgz` /
-  `.tar.gz` extraction is implemented; remote URL fetching remains deferred.
+  Browser-specific archive upload and extraction boundaries. Uploaded `.tgz`,
+  `.tar.gz`, and `.zip` extraction is implemented; remote archive URL fetching
+  remains deferred.
 
 src/adapters/validator/
   Boundary over @behavioml/validator. This is the only source directory that may

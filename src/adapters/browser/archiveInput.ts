@@ -1,4 +1,4 @@
-import { gunzipSync } from 'fflate';
+import { gunzipSync, unzipSync } from 'fflate';
 import {
   ApplicationError,
   adapterError,
@@ -25,6 +25,8 @@ export type ExtractedArchiveWorkspace = ArchiveExtractionResult;
 
 const TAR_BLOCK_SIZE = 512;
 const TEXT_FILE_EXTENSION_PATTERN = /\.(?:ya?ml|json)$/i;
+
+type SupportedArchiveType = 'tar_gzip' | 'zip';
 
 export async function extractUploadedArchive(
   input: UploadedArchiveInput,
@@ -56,26 +58,15 @@ export async function extractArchiveBytes(
   archiveBytes: ArrayBuffer,
   sourceLabel: string,
 ): Promise<ExtractedArchiveWorkspace> {
-  assertSupportedArchiveName(sourceLabel);
+  const archiveType = getSupportedArchiveType(sourceLabel);
 
   try {
-    const tarBytes = gunzipSync(new Uint8Array(archiveBytes));
-    const archiveFiles = extractRegularTextFilesFromTar(tarBytes);
-    const detectedWorkspace = detectWorkspaceRoot(archiveFiles);
-    const validationFiles = detectedWorkspace.files.filter(isRelevantValidationFile);
+    const archiveFiles =
+      archiveType === 'zip'
+        ? extractRegularTextFilesFromZip(new Uint8Array(archiveBytes))
+        : extractRegularTextFilesFromTar(gunzipSync(new Uint8Array(archiveBytes)));
 
-    if (validationFiles.length === 0) {
-      throw adapterError(
-        'workspace_root_not_found',
-        'A BehavioML model root was found, but it did not contain YAML or JSON model files relevant for validation.',
-      );
-    }
-
-    return {
-      files: validationFiles,
-      sourceLabel,
-      modelRoot: detectedWorkspace.rootPath,
-    };
+    return createExtractedArchiveWorkspace(archiveFiles, sourceLabel);
   } catch (cause) {
     if (cause instanceof ApplicationError) {
       throw cause;
@@ -83,21 +74,86 @@ export async function extractArchiveBytes(
 
     throw adapterError(
       'archive_extraction_failed',
-      `Could not extract .tgz/.tar.gz archive "${sourceLabel}".`,
+      `Could not extract ${formatArchiveTypeForError(archiveType)} archive "${sourceLabel}".`,
       cause,
     );
   }
 }
 
 function assertSupportedArchiveName(sourceLabel: string): void {
+  getSupportedArchiveType(sourceLabel);
+}
+
+function getSupportedArchiveType(sourceLabel: string): SupportedArchiveType {
   const lowerName = sourceLabel.toLowerCase();
 
-  if (!lowerName.endsWith('.tgz') && !lowerName.endsWith('.tar.gz')) {
+  if (lowerName.endsWith('.zip')) {
+    return 'zip';
+  }
+
+  if (lowerName.endsWith('.tgz') || lowerName.endsWith('.tar.gz')) {
+    return 'tar_gzip';
+  }
+
+  throw adapterError(
+    'unsupported_archive_type',
+    `Unsupported archive type for "${sourceLabel}". Upload a \`.tgz\`, \`.tar.gz\`, or \`.zip\` archive.`,
+  );
+}
+
+function formatArchiveTypeForError(archiveType: SupportedArchiveType): string {
+  return archiveType === 'zip' ? '.zip' : '.tgz/.tar.gz';
+}
+
+function createExtractedArchiveWorkspace(
+  archiveFiles: readonly WorkspaceFileEntry[],
+  sourceLabel: string,
+): ExtractedArchiveWorkspace {
+  const detectedWorkspace = detectWorkspaceRoot(archiveFiles);
+  const validationFiles = detectedWorkspace.files.filter(isRelevantValidationFile);
+
+  if (validationFiles.length === 0) {
     throw adapterError(
-      'unsupported_archive_type',
-      `Unsupported archive type for "${sourceLabel}". Upload a .tgz or .tar.gz archive.`,
+      'workspace_root_not_found',
+      'A BehavioML model root was found, but it did not contain YAML or JSON model files relevant for validation.',
     );
   }
+
+  return {
+    files: validationFiles,
+    sourceLabel,
+    modelRoot: detectedWorkspace.rootPath,
+  };
+}
+
+function extractRegularTextFilesFromZip(zipBytes: Uint8Array): WorkspaceFileEntry[] {
+  const files: WorkspaceFileEntry[] = [];
+  const decoder = new TextDecoder('utf-8', { fatal: true });
+  const entries = unzipSync(zipBytes);
+
+  for (const [path, contentBytes] of Object.entries(entries)) {
+    if (isDirectoryPath(path) || !TEXT_FILE_EXTENSION_PATTERN.test(path)) {
+      continue;
+    }
+
+    const normalizedPath = normalizeWorkspacePath(path);
+
+    try {
+      files.push({ path: normalizedPath, content: decoder.decode(contentBytes) });
+    } catch (cause) {
+      throw adapterError(
+        'archive_extraction_failed',
+        `Archive entry "${path}" is not valid UTF-8 text and cannot be loaded for validation.`,
+        cause,
+      );
+    }
+  }
+
+  return files;
+}
+
+function isDirectoryPath(path: string): boolean {
+  return path.endsWith('/') || path.endsWith('\\');
 }
 
 function extractRegularTextFilesFromTar(tarBytes: Uint8Array): WorkspaceFileEntry[] {

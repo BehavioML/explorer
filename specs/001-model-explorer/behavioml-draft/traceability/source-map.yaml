@@ -1,0 +1,10 @@
+# Feature-local experimental traceability map.
+#
+# Mappings may later connect anchors in source specification artifacts, such as
+# specs/001-model-explorer/spec.md#FR-003, to proposed BehavioML model elements,
+# such as workflows, capabilities, events, entities, state machines, or decisions.
+#
+# Do not invent final mappings in this placeholder file. Traceability is external
+# for now and is not a BehavioML metamodel field.
+
+mappings: []

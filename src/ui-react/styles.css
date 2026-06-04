@@ -147,3 +147,93 @@ code {
     grid-template-columns: 1fr;
   }
 }
+
+.workspace-summary {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1rem 0 0;
+  color: #31415f;
+}
+
+.workspace-summary div {
+  display: grid;
+  grid-template-columns: 8rem minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.workspace-summary dt {
+  font-weight: 700;
+}
+
+.workspace-summary dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.status-message--loading {
+  color: #123f73;
+  background: #e2f0ff;
+}
+
+.status-message--validated {
+  color: #14633b;
+  background: #def8ea;
+}
+
+.diagnostics-panel {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.diagnostic-count,
+.empty-diagnostics {
+  color: #52617a;
+}
+
+.diagnostic-list {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.diagnostic-item {
+  display: grid;
+  gap: 0.5rem;
+  padding: 1rem;
+  border: 1px solid #dce3f1;
+  border-radius: 14px;
+  background: #fbfcff;
+}
+
+.severity {
+  width: fit-content;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  background: #eef3ff;
+  color: #31415f;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.severity--error {
+  color: #8a1538;
+  background: #ffe7ef;
+}
+
+.severity--warning {
+  color: #7a4a00;
+  background: #fff4d8;
+}
+
+.severity--info {
+  color: #123f73;
+  background: #e2f0ff;
+}
+
+.diagnostic-message {
+  color: #202c43;
+  font-weight: 700;
+}

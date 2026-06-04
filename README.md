@@ -3,34 +3,89 @@
 This repository is the future home of the BehavioML Model Explorer: a web-based,
 read-only semantic navigation and review tool for BehavioML workspaces.
 
-The current implementation is an initial Vite + React + TypeScript scaffold. It
-establishes application boundaries for future Explorer work without implementing
-the full product, archive extraction, remote fetching, or Explorer-owned
-BehavioML semantics.
+The current implementation is an initial Vite + React + TypeScript vertical
+slice. It establishes application boundaries and supports uploaded archive
+validation without implementing the full Explorer product, remote fetching, or
+Explorer-owned BehavioML semantics.
 
 ## Current status
 
-Implemented in this scaffold:
+Implemented in this first vertical slice:
 
 - Vite + React + TypeScript application shell.
-- Framework-independent `src/core/` types for workspace files, validation view
-  models, application errors, and command/port boundaries.
-- Browser-only archive input adapter stubs under `src/adapters/browser/`.
-- Validator integration boundary under `src/adapters/validator/`.
-- Minimal React UI shell under `src/ui-react/` that shows the project title,
-  placeholder workspace loading, and placeholder validation status.
-- Build, typecheck, and architecture boundary test scripts.
+- Framework-independent `src/core/` types for workspace files, archive extraction
+  results, workspace root detection results, load/validation status, validation
+  view models, application errors, and command/port boundaries.
+- Browser-only uploaded `.tgz` / `.tar.gz` archive extraction under
+  `src/adapters/browser/`.
+- Minimal workspace root detection for model roots at the archive root or under
+  `behavioml/`, based on known BehavioML scope directories.
+- Validator integration boundary under `src/adapters/validator/`, with the
+  Validator package isolated to that adapter.
+- Minimal React UI under `src/ui-react/` for archive selection, loading state,
+  validation status, diagnostic counts, diagnostic details, and adapter errors.
+- Build, typecheck, architecture boundary tests, and non-UI workspace loading
+  tests.
 
 Deferred intentionally:
 
-- Archive extraction for `.tgz` / `.tar.gz` uploads.
-- Remote archive URL fetching.
-- Workspace root detection.
-- Full semantic navigation, search, backlinks, generated artifact discovery, and
-  supporting artifact discovery.
+- Remote archive URL fetching/loading.
+- Entity browser and full semantic navigation.
+- Search and backlinks.
+- Generated artifact discovery, supporting artifact discovery, and diagram
+  rendering.
+- Editing.
 - Full Explorer UI.
 - Any Explorer-owned BehavioML parser, resolver, validator, or diagnostics
   semantics.
+
+
+## Uploaded archive support
+
+The first vertical slice accepts an uploaded `.tgz` or `.tar.gz` file in the
+browser UI. The browser adapter decompresses the gzip payload, reads regular tar
+entries, keeps UTF-8 `.yaml`, `.yml`, and `.json` files relevant for validation,
+normalizes paths to POSIX-style workspace-relative paths, detects the model root,
+and passes in-memory file entries to the Validator adapter.
+
+Supported model root layouts for this slice:
+
+```text
+workflows/
+roles/
+...
+```
+
+or:
+
+```text
+behavioml/workflows/
+behavioml/roles/
+...
+```
+
+or the conventional repository layout:
+
+```text
+behavioml/model/workflows/
+behavioml/model/roles/
+...
+```
+
+A recognizable model root must contain at least one known BehavioML model scope
+directory, such as `workflows`, `roles`, `capabilities`, `interfaces`,
+`components`, `modules`, `entities`, `events`, `state-machines`, or `decisions`.
+If no root is found, or both supported roots are plausible, Explorer reports a
+clear adapter error instead of guessing.
+
+Archive extraction uses [`fflate`](https://www.npmjs.com/package/fflate) for
+gzip decompression. It was selected because it is small, browser-compatible, and
+focused on compression/decompression. Explorer keeps tar entry reading local to
+the browser adapter so no extraction behavior leaks into `src/core/` or the
+Validator adapter. The build also aliases the Validator package's Node
+filesystem dependency to a browser-only unavailable-filesystem shim; Explorer
+uses the Validator through its in-memory workspace path and does not ask the
+browser to read local filesystem paths.
 
 ## Architecture layers
 
@@ -39,8 +94,8 @@ src/core/
   Framework-independent application contracts and view-model types.
 
 src/adapters/browser/
-  Browser-specific archive upload, remote URL, fetch, and extraction boundaries.
-  These are stubs in this PR.
+  Browser-specific archive upload and extraction boundaries. Uploaded `.tgz` /
+  `.tar.gz` extraction is implemented; remote URL fetching remains deferred.
 
 src/adapters/validator/
   Boundary over @behavioml/validator. This is the only source directory that may
@@ -112,7 +167,7 @@ Build:
 npm run build
 ```
 
-Run architecture boundary tests:
+Run architecture boundary and workspace loading tests:
 
 ```sh
 npm test

@@ -1,7 +1,11 @@
 export type ApplicationErrorKind =
   | 'not_implemented'
   | 'adapter_error'
-  | 'validation_unavailable';
+  | 'validation_unavailable'
+  | 'unsupported_archive_type'
+  | 'archive_extraction_failed'
+  | 'workspace_root_not_found'
+  | 'workspace_root_ambiguous';
 
 export class ApplicationError extends Error {
   readonly kind: ApplicationErrorKind;
@@ -15,4 +19,12 @@ export class ApplicationError extends Error {
 
 export function notImplemented(message: string): ApplicationError {
   return new ApplicationError('not_implemented', message);
+}
+
+export function adapterError(
+  kind: Exclude<ApplicationErrorKind, 'not_implemented'>,
+  message: string,
+  cause?: unknown,
+): ApplicationError {
+  return new ApplicationError(kind, message, cause instanceof Error ? { cause } : undefined);
 }

@@ -125,9 +125,9 @@ function toDiagnosticViewModel(value: unknown, defaultSeverity = 'error'): Diagn
   return {
     severity: readString(diagnostic?.severity) ?? defaultSeverity,
     message: readString(diagnostic?.message) ?? 'Validator reported a diagnostic without a message.',
-    filePath:
-      readString(diagnostic?.filePath) ?? readString(diagnostic?.file) ?? readString(diagnostic?.path),
-    fieldPath: readString(diagnostic?.fieldPath) ?? readString(diagnostic?.field),
+    filePath: readString(diagnostic?.filePath) ?? readString(diagnostic?.file),
+    fieldPath:
+      readString(diagnostic?.fieldPath) ?? readString(diagnostic?.field) ?? readString(diagnostic?.path),
   };
 }
 

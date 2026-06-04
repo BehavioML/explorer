@@ -1,5 +1,13 @@
-import type { WorkspaceFileEntry } from '../../core';
-import { notImplemented } from '../../core';
+import { gunzipSync } from 'fflate';
+import {
+  ApplicationError,
+  adapterError,
+  detectWorkspaceRoot,
+  notImplemented,
+  normalizeWorkspacePath,
+  type ArchiveExtractionResult,
+  type WorkspaceFileEntry,
+} from '../../core';
 
 export interface UploadedArchiveInput {
   readonly kind: 'uploaded_archive';
@@ -13,30 +21,171 @@ export interface RemoteArchiveUrlInput {
 
 export type BrowserArchiveInput = UploadedArchiveInput | RemoteArchiveUrlInput;
 
-export interface ExtractedArchiveWorkspace {
-  readonly files: readonly WorkspaceFileEntry[];
-  readonly sourceLabel: string;
-}
+export type ExtractedArchiveWorkspace = ArchiveExtractionResult;
+
+const TAR_BLOCK_SIZE = 512;
+const TEXT_FILE_EXTENSION_PATTERN = /\.(?:ya?ml|json)$/i;
 
 export async function extractUploadedArchive(
-  _input: UploadedArchiveInput,
+  input: UploadedArchiveInput,
 ): Promise<ExtractedArchiveWorkspace> {
-  throw notImplemented(
-    'Uploaded archive extraction is not implemented yet. The browser adapter boundary is ready for a future extraction library.',
-  );
+  assertSupportedArchiveName(input.file.name);
+
+  try {
+    return await extractArchiveBytes(await input.file.arrayBuffer(), input.file.name);
+  } catch (cause) {
+    if (cause instanceof ApplicationError) {
+      throw cause;
+    }
+
+    throw adapterError(
+      'archive_extraction_failed',
+      `Could not extract uploaded archive "${input.file.name}".`,
+      cause,
+    );
+  }
 }
 
 export async function fetchRemoteArchive(_input: RemoteArchiveUrlInput): Promise<ArrayBuffer> {
   throw notImplemented(
-    'Remote archive fetching is not implemented yet. The browser adapter boundary is ready for a future fetch implementation.',
+    'Remote archive fetching is intentionally deferred for the first Explorer vertical slice.',
   );
 }
 
 export async function extractArchiveBytes(
-  _archiveBytes: ArrayBuffer,
-  _sourceLabel: string,
+  archiveBytes: ArrayBuffer,
+  sourceLabel: string,
 ): Promise<ExtractedArchiveWorkspace> {
-  throw notImplemented(
-    'Archive byte extraction is not implemented yet. This scaffold intentionally defers .tgz/.tar.gz decompression.',
-  );
+  assertSupportedArchiveName(sourceLabel);
+
+  try {
+    const tarBytes = gunzipSync(new Uint8Array(archiveBytes));
+    const archiveFiles = extractRegularTextFilesFromTar(tarBytes);
+    const detectedWorkspace = detectWorkspaceRoot(archiveFiles);
+    const validationFiles = detectedWorkspace.files.filter(isRelevantValidationFile);
+
+    if (validationFiles.length === 0) {
+      throw adapterError(
+        'workspace_root_not_found',
+        'A BehavioML model root was found, but it did not contain YAML or JSON model files relevant for validation.',
+      );
+    }
+
+    return {
+      files: validationFiles,
+      sourceLabel,
+      modelRoot: detectedWorkspace.rootPath,
+    };
+  } catch (cause) {
+    if (cause instanceof ApplicationError) {
+      throw cause;
+    }
+
+    throw adapterError(
+      'archive_extraction_failed',
+      `Could not extract .tgz/.tar.gz archive "${sourceLabel}".`,
+      cause,
+    );
+  }
+}
+
+function assertSupportedArchiveName(sourceLabel: string): void {
+  const lowerName = sourceLabel.toLowerCase();
+
+  if (!lowerName.endsWith('.tgz') && !lowerName.endsWith('.tar.gz')) {
+    throw adapterError(
+      'unsupported_archive_type',
+      `Unsupported archive type for "${sourceLabel}". Upload a .tgz or .tar.gz archive.`,
+    );
+  }
+}
+
+function extractRegularTextFilesFromTar(tarBytes: Uint8Array): WorkspaceFileEntry[] {
+  const files: WorkspaceFileEntry[] = [];
+  const decoder = new TextDecoder('utf-8', { fatal: true });
+
+  for (let offset = 0; offset + TAR_BLOCK_SIZE <= tarBytes.length; ) {
+    const header = tarBytes.subarray(offset, offset + TAR_BLOCK_SIZE);
+
+    if (isZeroBlock(header)) {
+      break;
+    }
+
+    const path = readTarPath(header);
+    const size = readTarOctal(header, 124, 12);
+    const typeFlag = String.fromCharCode(header[156] ?? 0);
+    const contentOffset = offset + TAR_BLOCK_SIZE;
+    const nextOffset = contentOffset + Math.ceil(size / TAR_BLOCK_SIZE) * TAR_BLOCK_SIZE;
+
+    if (nextOffset > tarBytes.length) {
+      throw adapterError(
+        'archive_extraction_failed',
+        `Archive entry "${path}" extends past the end of the tar payload.`,
+      );
+    }
+
+    if (isRegularTarEntry(typeFlag) && TEXT_FILE_EXTENSION_PATTERN.test(path)) {
+      const normalizedPath = normalizeWorkspacePath(path);
+      const contentBytes = tarBytes.subarray(contentOffset, contentOffset + size);
+
+      try {
+        files.push({ path: normalizedPath, content: decoder.decode(contentBytes) });
+      } catch (cause) {
+        throw adapterError(
+          'archive_extraction_failed',
+          `Archive entry "${path}" is not valid UTF-8 text and cannot be loaded for validation.`,
+          cause,
+        );
+      }
+    }
+
+    offset = nextOffset;
+  }
+
+  return files;
+}
+
+function readTarPath(header: Uint8Array): string {
+  const name = readNullTerminatedString(header, 0, 100);
+  const prefix = readNullTerminatedString(header, 345, 155);
+  return prefix ? `${prefix}/${name}` : name;
+}
+
+function readTarOctal(header: Uint8Array, start: number, length: number): number {
+  const rawValue = readNullTerminatedString(header, start, length).trim();
+
+  if (!rawValue) {
+    return 0;
+  }
+
+  const value = Number.parseInt(rawValue, 8);
+
+  if (Number.isNaN(value)) {
+    throw adapterError('archive_extraction_failed', `Invalid tar size value "${rawValue}".`);
+  }
+
+  return value;
+}
+
+function readNullTerminatedString(bytes: Uint8Array, start: number, length: number): string {
+  const end = start + length;
+  let cursor = start;
+
+  while (cursor < end && bytes[cursor] !== 0) {
+    cursor += 1;
+  }
+
+  return new TextDecoder().decode(bytes.subarray(start, cursor));
+}
+
+function isZeroBlock(block: Uint8Array): boolean {
+  return block.every((byte) => byte === 0);
+}
+
+function isRegularTarEntry(typeFlag: string): boolean {
+  return typeFlag === '0' || typeFlag === '\0';
+}
+
+function isRelevantValidationFile(file: WorkspaceFileEntry): boolean {
+  return TEXT_FILE_EXTENSION_PATTERN.test(file.path);
 }

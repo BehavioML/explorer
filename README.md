@@ -28,9 +28,10 @@ Implemented in this first vertical slice:
   Validator package isolated to that adapter.
 - Minimal React UI under `src/ui-react/` for archive selection, loading state,
   workspace overview, grouped path-derived entity browsing, selected entity
-  summaries, raw read-only source display, selected-file diagnostics, validation
-  status, diagnostic counts, diagnostic details, exact-path diagnostic navigation,
-  selected diagnostic source context, and adapter errors.
+  summaries, local text/path search, raw read-only source display, selected-file
+  diagnostics, validation status, diagnostic counts, diagnostic details, exact-path
+  diagnostic navigation, selected diagnostic source context, selected source search
+  context, and adapter errors.
 - Build, typecheck, architecture boundary tests, and non-UI workspace loading
   tests.
 
@@ -39,7 +40,7 @@ Deferred intentionally:
 - Remote archive URL fetching/loading.
 - Full semantic entity navigation.
 - Line highlighting and semantic field navigation for diagnostics.
-- Search, reference resolution, and backlinks.
+- Semantic search, reference resolution, and backlinks.
 - Generated artifact discovery, supporting artifact discovery, and diagram
   rendering.
 - Editing.
@@ -114,9 +115,11 @@ artifacts, supporting artifacts, or model semantics.
 
 The BehavioML Validator remains the authority for parsing, model loading,
 reference resolution, validation rules, diagnostics semantics, summaries, and
-coverage. Search, reference resolution, backlinks, generated artifact discovery,
-supporting artifact discovery, diagram rendering, editing, and semantic entity
-metadata remain deferred.
+coverage. Explorer supports local text/path search over already extracted
+workspace files and path-derived entity metadata, but semantic search, reference
+resolution, backlinks, generated artifact discovery, supporting artifact
+discovery, diagram rendering, editing, and semantic entity metadata remain
+deferred.
 
 ## Entity browser skeleton
 
@@ -138,6 +141,22 @@ structure. Explorer does not parse YAML or JSON contents for entity fields,
 references, backlinks, generated artifacts, supporting artifacts, diagrams, or
 semantic metadata. If Explorer needs semantic entity metadata later, that data
 should come from Validator API output rather than an Explorer-owned parser.
+
+## Local search
+
+Explorer includes a local read-only search panel for the currently loaded
+in-memory workspace. Search is case-insensitive substring matching over
+path-derived entity identity, scope, display name, file path, and raw extracted
+source text. Source content matches report the matching file path, line number,
+and line text so users can navigate to the corresponding selected source when a
+path-derived entity exists.
+
+Search is intentionally text/path-based only. YAML and JSON files are treated as
+plain text; Explorer does not interpret fields, resolve references, infer
+backlinks, rank semantic relevance, or build graph navigation from search
+results. Source matches in extracted files that are not part of the
+path-derived entity index are shown gracefully without changing the current
+entity selection.
 
 ## Selected entity source view
 
@@ -166,9 +185,10 @@ file path. If a diagnostic file path is not part of the path-derived entity
 index, Explorer keeps the current entity selection and reports that no matching
 entity was found.
 
-Line highlighting, semantic field navigation, reference resolution, backlinks,
-and search remain deferred. Explorer does not invent line numbers from Validator
-field paths.
+Source line highlighting, semantic field navigation, reference resolution, and
+backlinks remain deferred. Explorer does not invent line numbers from Validator
+field paths, and local search line numbers come only from raw source text
+matches.
 
 ## Architecture layers
 

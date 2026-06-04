@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { extractUploadedArchive } from '../adapters/browser';
 import { validateInMemoryModelWorkspace } from '../adapters/validator';
 import {
@@ -11,11 +11,13 @@ import {
   findDiagnosticsForEntity,
   findSelectedEntity,
   getDefaultEntitySelection,
+  searchWorkspace,
   type DiagnosticSelection,
   type DiagnosticViewModel,
   type PathDerivedEntityIndex,
   type PathDerivedEntitySelection,
   type PathDerivedModelEntity,
+  type SearchResult,
   type SourceFileViewModel,
   type ValidationResultViewModel,
   type WorkspaceFileEntry,
@@ -273,9 +275,37 @@ function EntityBrowser({
   readonly selectedEntity: PathDerivedEntitySelection;
   readonly onSelectEntity: (selection: PathDerivedEntitySelection) => void;
 }) {
+  const [searchText, setSearchText] = useState('');
+  const [selectedSearchResult, setSelectedSearchResult] = useState<SearchResult>();
   const selected = findSelectedEntity(index, selectedEntity);
   const sourceView = selected ? createSourceFileView(files, selected) : undefined;
   const selectedDiagnostics = selected ? findDiagnosticsForEntity(diagnostics, selected) : [];
+  const searchResults = useMemo(
+    () => searchWorkspace({ query: searchText, files, entityIndex: index }),
+    [files, index, searchText],
+  );
+
+  function handleEntityListSelection(selection: PathDerivedEntitySelection) {
+    setSelectedSearchResult(undefined);
+    onSelectEntity(selection);
+  }
+
+  function handleSearchQueryChanged(query: string) {
+    setSearchText(query);
+    setSelectedSearchResult(undefined);
+  }
+
+  function handleSearchResultSelected(result: SearchResult) {
+    if (result.kind === 'entity') {
+      setSelectedSearchResult(undefined);
+    } else {
+      setSelectedSearchResult(result);
+    }
+
+    if (result.entityKey) {
+      onSelectEntity(result.entityKey);
+    }
+  }
 
   return (
     <section className="entity-browser-panel" aria-labelledby="entity-browser-title">
@@ -293,32 +323,132 @@ function EntityBrowser({
 
       {index.totalEntities > 0 ? (
         <div className="entity-browser-layout">
-          <EntityScopeList
-            index={index}
-            selectedEntity={selectedEntity}
-            onSelectEntity={onSelectEntity}
-          />
+          <div className="entity-browser-sidebar">
+            <SearchPanel
+              query={searchText}
+              results={searchResults}
+              selectedSearchResult={selectedSearchResult}
+              onQueryChange={handleSearchQueryChanged}
+              onSelectResult={handleSearchResultSelected}
+            />
+            <EntityScopeList
+              index={index}
+              selectedEntity={selectedEntity}
+              onSelectEntity={handleEntityListSelection}
+            />
+          </div>
           <div className="entity-detail-stack">
             <SelectedEntitySummary entity={selected} diagnosticCount={selectedDiagnostics.length} />
             <SourcePanel
               diagnostics={selectedDiagnostics}
               entity={selected}
               selectedDiagnostic={selectedDiagnostic}
+              selectedSearchResult={selectedSearchResult}
               sourceView={sourceView}
             />
           </div>
         </div>
       ) : (
         <div className="entity-detail-stack">
+          <SearchPanel
+            query={searchText}
+            results={searchResults}
+            selectedSearchResult={selectedSearchResult}
+            onQueryChange={handleSearchQueryChanged}
+            onSelectResult={handleSearchResultSelected}
+          />
           <p className="empty-entities">
             No path-derived model entities were found in known BehavioML scope directories.
           </p>
+          <SelectedSearchMatchContext result={selectedSearchResult} />
           <SelectedDiagnosticContext selection={selectedDiagnostic} />
         </div>
       )}
     </section>
   );
 }
+
+function SearchPanel({
+  query,
+  results,
+  selectedSearchResult,
+  onQueryChange,
+  onSelectResult,
+}: {
+  readonly query: string;
+  readonly results: readonly SearchResult[];
+  readonly selectedSearchResult: SearchResult | undefined;
+  readonly onQueryChange: (query: string) => void;
+  readonly onSelectResult: (result: SearchResult) => void;
+}) {
+  const trimmedQuery = query.trim();
+
+  return (
+    <section className="search-panel" aria-labelledby="local-search-title">
+      <div>
+        <h3 id="local-search-title">Local search</h3>
+        <p>
+          Search entity identity, scope, display name, file path, and raw source text. YAML and JSON
+          are treated as plain text.
+        </p>
+      </div>
+      <label className="search-input-label">
+        <span>Search loaded workspace</span>
+        <input
+          type="search"
+          value={query}
+          placeholder="Type text or a path fragment..."
+          onChange={(event) => onQueryChange(event.currentTarget.value)}
+        />
+      </label>
+
+      {trimmedQuery.length > 0 ? (
+        <div className="search-results" aria-live="polite">
+          <p className="search-result-count">
+            {results.length} result{results.length === 1 ? '' : 's'}
+            {results.length >= 100 ? ' shown' : ''}
+          </p>
+          {results.length > 0 ? (
+            <ul>
+              {results.map((result, index) => {
+                const resultKey = formatSearchResultKey(result, index);
+                const isSelected = selectedSearchResult === result;
+
+                return (
+                  <li key={resultKey}>
+                    <button
+                      className={
+                        isSelected
+                          ? 'search-result-button search-result-button--selected'
+                          : 'search-result-button'
+                      }
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => onSelectResult(result)}
+                    >
+                      <span className="search-result-kind">
+                        {result.kind === 'entity' ? 'Entity' : 'Source'}
+                      </span>
+                      <strong>{result.label}</strong>
+                      {result.filePath ? <code>{result.filePath}</code> : null}
+                      {result.kind === 'source_match' && result.lineNumber ? (
+                        <span className="search-result-line">Line {result.lineNumber}</span>
+                      ) : null}
+                      <span className="search-result-match">{result.matchText}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="empty-search-results">No local text/path matches found.</p>
+          )}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 
 function EntityScopeList({
   index,
@@ -433,11 +563,13 @@ function SourcePanel({
   diagnostics,
   entity,
   selectedDiagnostic,
+  selectedSearchResult,
   sourceView,
 }: {
   readonly diagnostics: readonly DiagnosticViewModel[];
   readonly entity: PathDerivedModelEntity | undefined;
   readonly selectedDiagnostic: DiagnosticSelection | undefined;
+  readonly selectedSearchResult: SearchResult | undefined;
   readonly sourceView: SourceFileViewModel | undefined;
 }) {
   if (!entity) {
@@ -452,6 +584,7 @@ function SourcePanel({
         <p className="missing-source">
           Source file <code>{entity.filePath}</code> is not available in the extracted workspace.
         </p>
+        <SelectedSearchMatchContext result={selectedSearchResult} />
         <SelectedDiagnosticContext selection={selectedDiagnostic} />
       </section>
     );
@@ -487,6 +620,7 @@ function SourcePanel({
         </div>
       </dl>
 
+      <SelectedSearchMatchContext result={selectedSearchResult} />
       <SelectedDiagnosticContext selection={selectedDiagnostic} />
       <SelectedSourceDiagnostics diagnostics={diagnostics} />
 
@@ -494,6 +628,43 @@ function SourcePanel({
     </section>
   );
 }
+
+function SelectedSearchMatchContext({
+  result,
+}: {
+  readonly result: SearchResult | undefined;
+}) {
+  if (!result || result.kind !== 'source_match') {
+    return null;
+  }
+
+  return (
+    <aside className="selected-search-context" aria-label="Selected search match context">
+      <h4>Selected search match</h4>
+      {!result.entityKey ? (
+        <p className="search-navigation-note">
+          This source match is in an extracted workspace file that is not part of the path-derived
+          entity index. The current entity selection is unchanged.
+        </p>
+      ) : null}
+      <dl className="selected-search-list">
+        <div>
+          <dt>File path</dt>
+          <dd>{result.filePath ? <code>{result.filePath}</code> : 'No file path'}</dd>
+        </div>
+        <div>
+          <dt>Line</dt>
+          <dd>{result.lineNumber ?? 'Not available'}</dd>
+        </div>
+        <div>
+          <dt>Line text</dt>
+          <dd>{result.lineText ?? result.matchText}</dd>
+        </div>
+      </dl>
+    </aside>
+  );
+}
+
 
 function SelectedSourceDiagnostics({
   diagnostics,
@@ -643,6 +814,18 @@ function DiagnosticItem({
     </li>
   );
 }
+
+function formatSearchResultKey(result: SearchResult, fallbackIndex: number): string {
+  return [
+    result.kind,
+    result.filePath ?? 'workspace',
+    result.scope ?? '',
+    result.identity ?? '',
+    result.lineNumber ?? '',
+    fallbackIndex,
+  ].join(':');
+}
+
 
 function formatValidationStatus(status: WorkspaceOverviewValidationStatus): string {
   switch (status) {

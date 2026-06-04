@@ -339,6 +339,7 @@ function EntityBrowser({
           </div>
           <div className="entity-detail-stack">
             <SelectedEntitySummary entity={selected} diagnosticCount={selectedDiagnostics.length} />
+            <SelectedDiagnosticContext selection={selectedDiagnostic} />
             <SourcePanel
               diagnostics={selectedDiagnostics}
               entity={selected}

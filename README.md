@@ -22,8 +22,11 @@ Implemented in this first vertical slice:
   command/port boundaries.
 - Browser-only uploaded `.tgz`, `.tar.gz`, and `.zip` archive extraction under
   `src/adapters/browser/`.
-- Minimal workspace root detection for model roots at the archive root or under
-  `behavioml/`, based on known BehavioML scope directories.
+- Minimal workspace root detection for model roots at the archive root, under
+  `behavioml/` or `behavioml/model/`, under feature-local
+  `specs/<feature>/behavioml-draft/model/` drafts, or under the same layouts
+  inside a GitHub “Download ZIP” top-level wrapper directory, based on known
+  BehavioML scope directories.
 - Validator integration boundary under `src/adapters/validator/`, with the
   Validator package isolated to that adapter.
 - Minimal React UI under `src/ui-react/` for archive selection, loading state,
@@ -57,6 +60,10 @@ and `.json` files relevant for validation, normalizes paths to POSIX-style
 workspace-relative paths, detects the model root, and passes in-memory file
 entries to the Validator adapter.
 
+GitHub “Download ZIP” archives are supported. Explorer accounts for the single
+top-level wrapper directory GitHub adds around repository contents, such as
+`explorer-main/`, before it passes validation files to the Validator.
+
 Supported model root layouts for this slice:
 
 ```text
@@ -81,11 +88,31 @@ behavioml/model/roles/
 ...
 ```
 
+or a feature-local BehavioML draft layout:
+
+```text
+specs/<feature>/behavioml-draft/model/workflows/
+specs/<feature>/behavioml-draft/model/roles/
+...
+```
+
+The same layouts are also supported under a GitHub ZIP top-level wrapper
+directory:
+
+```text
+<repo-name>/workflows/
+<repo-name>/behavioml/workflows/
+<repo-name>/behavioml/model/workflows/
+<repo-name>/specs/<feature>/behavioml-draft/model/workflows/
+...
+```
+
 A recognizable model root must contain at least one known BehavioML model scope
 directory, such as `workflows`, `roles`, `capabilities`, `interfaces`,
 `components`, `modules`, `entities`, `events`, `state-machines`, or `decisions`.
-If no root is found, or both supported roots are plausible, Explorer reports a
-clear adapter error instead of guessing.
+GitHub Actions workflow directories such as `.github/workflows/` are not treated
+as BehavioML model roots. If no root is found, or multiple populated model roots
+are plausible, Explorer reports a clear adapter error instead of guessing.
 
 Archive extraction uses [`fflate`](https://www.npmjs.com/package/fflate) for
 gzip decompression and ZIP extraction. It was selected because it is small,

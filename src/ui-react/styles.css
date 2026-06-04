@@ -32,6 +32,7 @@ input {
 
 .hero-panel,
 .workspace-panel,
+.overview-panel,
 .status-panel {
   border: 1px solid #dce3f1;
   border-radius: 24px;
@@ -44,6 +45,7 @@ input {
 }
 
 .workspace-panel,
+.overview-panel,
 .status-panel {
   padding: 2rem;
 }
@@ -83,6 +85,7 @@ h2 {
 
 .hero-copy,
 .workspace-panel p,
+.overview-panel p,
 .status-note {
   color: #52617a;
   line-height: 1.65;
@@ -138,6 +141,7 @@ code {
 
   .hero-panel,
   .workspace-panel,
+  .overview-panel,
   .status-panel {
     padding: 1.25rem;
     border-radius: 18px;
@@ -236,4 +240,33 @@ code {
 .diagnostic-message {
   color: #202c43;
   font-weight: 700;
+}
+
+
+.overview-panel h3 {
+  margin: 1.5rem 0 0.75rem;
+  color: #202c43;
+}
+
+.scope-count-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.scope-count-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #dce3f1;
+  border-radius: 14px;
+  color: #31415f;
+  background: #fbfcff;
+}
+
+.scope-count-list span {
+  overflow-wrap: anywhere;
 }

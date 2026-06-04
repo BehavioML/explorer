@@ -5,8 +5,8 @@ read-only semantic navigation and review tool for BehavioML workspaces.
 
 The current implementation is an initial Vite + React + TypeScript vertical
 slice. It establishes application boundaries and supports uploaded archive
-validation without implementing the full Explorer product, remote fetching, or
-Explorer-owned BehavioML semantics.
+validation plus a semantic workspace overview without implementing the full
+Explorer product, remote fetching, or Explorer-owned BehavioML semantics.
 
 ## Current status
 
@@ -15,7 +15,8 @@ Implemented in this first vertical slice:
 - Vite + React + TypeScript application shell.
 - Framework-independent `src/core/` types for workspace files, archive extraction
   results, workspace root detection results, load/validation status, validation
-  view models, application errors, and command/port boundaries.
+  view models, path-based workspace overview models, application errors, and
+  command/port boundaries.
 - Browser-only uploaded `.tgz` / `.tar.gz` archive extraction under
   `src/adapters/browser/`.
 - Minimal workspace root detection for model roots at the archive root or under
@@ -23,7 +24,8 @@ Implemented in this first vertical slice:
 - Validator integration boundary under `src/adapters/validator/`, with the
   Validator package isolated to that adapter.
 - Minimal React UI under `src/ui-react/` for archive selection, loading state,
-  validation status, diagnostic counts, diagnostic details, and adapter errors.
+  workspace overview, validation status, diagnostic counts, diagnostic details,
+  and adapter errors.
 - Build, typecheck, architecture boundary tests, and non-UI workspace loading
   tests.
 
@@ -86,6 +88,26 @@ Validator adapter. The build also aliases the Validator package's Node
 filesystem dependency to a browser-only unavailable-filesystem shim; Explorer
 uses the Validator through its in-memory workspace path and does not ask the
 browser to read local filesystem paths.
+
+
+## Workspace overview
+
+After a supported uploaded archive is extracted and a model root is detected,
+Explorer shows a workspace overview for the in-memory validation workspace. The
+overview includes the source label, detected model root, validation file count,
+known BehavioML scope counts, validation status, and a diagnostic summary.
+
+Scope counts are intentionally path-based and non-authoritative: Explorer counts
+workspace-relative files whose first path segment is one of the known model scope
+directories (`workflows`, `roles`, `capabilities`, `interfaces`, `components`,
+`modules`, `entities`, `events`, `state-machines`, or `decisions`). It does not
+inspect YAML or JSON content to infer entity kinds, references, generated
+artifacts, supporting artifacts, or model semantics.
+
+The BehavioML Validator remains the authority for parsing, model loading,
+reference resolution, validation rules, diagnostics semantics, summaries, and
+coverage. Entity browsing, search, backlinks, generated artifact discovery,
+supporting artifact discovery, diagram rendering, and editing remain deferred.
 
 ## Architecture layers
 

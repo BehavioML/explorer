@@ -1,0 +1,2 @@
+description: |
+  The embedded or reused BehavioML Validator acting as the semantic model engine for parsing, indexing, reference resolution, backlinks, diagnostics, and source locations where available.

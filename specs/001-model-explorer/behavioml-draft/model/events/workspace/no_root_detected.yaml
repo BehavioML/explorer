@@ -1,0 +1,2 @@
+description: |
+  The Explorer completes workspace root detection without finding a supported BehavioML workspace layout.

@@ -1,0 +1,10 @@
+description: |
+  Adapter boundary that lets Explorer core reuse the BehavioML Validator as semantic engine without reimplementing parsing, resolution, backlinks, diagnostics, or source location semantics.
+
+implements:
+  capabilities:
+    - validation/run_validation
+  interfaces:
+    - validator/validator_engine
+
+belongs_to: validator_integration

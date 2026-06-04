@@ -1,0 +1,2 @@
+description: |
+  Boundary for accepting user-supplied `.tgz` or `.tar.gz` archive bytes without tying workspace loading semantics to a UI framework.

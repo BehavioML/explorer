@@ -1,0 +1,9 @@
+description: |
+  Extract supported archive content into inspectable workspace files while reporting unsupported or unextractable archive occurrences.
+
+requires:
+  - archive/archive_extraction
+
+events:
+  - workspace/unsupported_archive_identified
+  - workspace/archive_extraction_blocked

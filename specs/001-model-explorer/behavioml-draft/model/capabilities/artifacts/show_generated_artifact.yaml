@@ -1,0 +1,8 @@
+description: |
+  Open a discovered generated diagram, report, validation output, or other derived artifact and relate it back to model context when known.
+
+requires:
+  - artifacts/generated_artifact_reader
+
+events:
+  - artifacts/generated_artifact_opened

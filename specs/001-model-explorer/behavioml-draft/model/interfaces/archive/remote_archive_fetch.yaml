@@ -1,0 +1,2 @@
+description: |
+  Boundary for retrieving a public unauthenticated remote archive URL directly from the browser when possible.

@@ -1,0 +1,5 @@
+description: |
+  Switch between complementary views of the same selected entity while preserving selected entity and surrounding navigation context where possible.
+
+events:
+  - navigation/entity_view_changed

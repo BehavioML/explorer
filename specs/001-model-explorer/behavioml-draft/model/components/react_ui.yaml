@@ -1,0 +1,6 @@
+description: |
+  Replaceable UI adapter for presenting Explorer view models and adapting user interactions; it does not own semantic workspace loading, parsing, validation, indexing, navigation, or diagnostics behavior.
+
+implements:
+
+belongs_to: ui

@@ -1,0 +1,5 @@
+description: |
+  Navigate from an actionable search result to its semantic model entity, diagnostic, source file, generated artifact, or supporting artifact target when possible.
+
+events:
+  - search/search_result_selected

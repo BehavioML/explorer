@@ -1,0 +1,7 @@
+description: |
+  Detect whether extracted content contains a BehavioML workspace at archive root or under a `behavioml/` directory, and expose missing or ambiguous root occurrences.
+
+events:
+  - workspace/root_detected
+  - workspace/ambiguous_roots_detected
+  - workspace/no_root_detected

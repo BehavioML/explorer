@@ -1,0 +1,22 @@
+description: |
+  The user inspects the loaded workspace overview to understand root, scopes, model health, entry points, and discovered artifacts.
+
+roles:
+  primary: user
+  participants:
+    - explorer
+
+steps:
+  - from: user
+    to: explorer
+    capability: workspace/show_overview
+    label: Request workspace overview
+  - from: explorer
+    capability: validation/show_diagnostics
+    label: Summarize available model health
+  - from: explorer
+    capability: workspace/discover_generated_artifacts
+    label: Summarize generated artifact availability
+  - from: explorer
+    capability: workspace/discover_supporting_artifacts
+    label: Summarize supporting artifact availability

@@ -1,0 +1,16 @@
+description: |
+  The user switches between complementary views for the same selected model entity without losing context where possible.
+
+roles:
+  primary: user
+  participants:
+    - explorer
+
+steps:
+  - from: user
+    to: explorer
+    capability: navigation/switch_view
+    label: Choose complementary entity view
+  - from: explorer
+    capability: navigation/preserve_context
+    label: Preserve selected entity and surrounding context

@@ -1,0 +1,2 @@
+description: |
+  Boundary to the BehavioML Validator used as the authoritative semantic engine for model interpretation, reference resolution, backlinks, diagnostics, and source locations where available.

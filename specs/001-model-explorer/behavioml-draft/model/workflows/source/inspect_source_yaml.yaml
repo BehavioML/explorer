@@ -1,0 +1,16 @@
+description: |
+  The user opens exact source YAML for a selected entity or diagnostic source location and returns to semantic context.
+
+roles:
+  primary: user
+  participants:
+    - explorer
+
+steps:
+  - from: user
+    to: explorer
+    capability: source/open_yaml
+    label: Open source YAML
+  - from: explorer
+    capability: navigation/preserve_context
+    label: Preserve selected entity and source context

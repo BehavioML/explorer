@@ -1,0 +1,2 @@
+description: |
+  Browser-specific adapter boundary for upload, direct remote archive fetch, and decompression concerns.

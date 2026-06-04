@@ -1,0 +1,5 @@
+description: |
+  Navigate from a displayed resolvable BehavioML reference to the referenced model entity without reinterpreting reference semantics in the UI.
+
+events:
+  - navigation/reference_followed

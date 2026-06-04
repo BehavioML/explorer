@@ -1,0 +1,2 @@
+description: |
+  The Model Explorer as the functional participant that loads archives, detects workspaces, builds semantic navigation context, and presents model review views without becoming the BehavioML source of truth.

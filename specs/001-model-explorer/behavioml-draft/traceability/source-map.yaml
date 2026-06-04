@@ -1,10 +1,192 @@
 # Feature-local experimental traceability map.
 #
-# Mappings may later connect anchors in source specification artifacts, such as
-# specs/001-model-explorer/spec.md#FR-003, to proposed BehavioML model elements,
-# such as workflows, capabilities, events, entities, state machines, or decisions.
-#
-# Do not invent final mappings in this placeholder file. Traceability is external
-# for now and is not a BehavioML metamodel field.
+# Mappings connect inspected source specification and planning anchors to proposed
+# feature-local BehavioML draft elements. Traceability remains external for now
+# and is not represented as a BehavioML metamodel field.
 
-mappings: []
+mappings:
+  - source: specs/001-model-explorer/spec.md#feature
+    targets:
+      - roles:explorer
+      - workflows:workspace/load_from_uploaded_archive
+      - workflows:workspace/load_from_remote_archive_url
+      - decisions:keep_explorer_read_only_and_archive_based
+  - source: specs/001-model-explorer/spec.md#product-principles
+    targets:
+      - capabilities:workspace/show_overview
+      - capabilities:navigation/select_entity
+      - capabilities:navigation/switch_view
+      - capabilities:source/open_yaml
+      - decisions:keep_supporting_and_generated_artifacts_external
+  - source: specs/001-model-explorer/spec.md#input-sources
+    targets:
+      - roles:archive_source
+      - workflows:workspace/load_from_uploaded_archive
+      - workflows:workspace/load_from_remote_archive_url
+      - capabilities:workspace/load_uploaded_archive
+      - capabilities:workspace/load_remote_archive
+      - interfaces:archive/archive_input
+      - interfaces:archive/remote_archive_fetch
+  - source: specs/001-model-explorer/spec.md#workspace-detection
+    targets:
+      - capabilities:workspace/extract_archive
+      - capabilities:workspace/detect_workspace_root
+      - entities:workspace
+      - state-machines:workspace/lifecycle
+      - events:workspace/root_detected
+      - events:workspace/ambiguous_roots_detected
+      - events:workspace/no_root_detected
+  - source: specs/001-model-explorer/spec.md#supporting-artifacts
+    targets:
+      - capabilities:workspace/discover_supporting_artifacts
+      - capabilities:context/show_supporting_artifact
+      - entities:supporting_artifact
+      - interfaces:artifacts/supporting_artifact_reader
+      - workflows:context/inspect_supporting_artifact
+  - source: specs/001-model-explorer/spec.md#primary-scenarios
+    targets:
+      - workflows:workspace/load_from_uploaded_archive
+      - workflows:workspace/load_from_remote_archive_url
+      - workflows:workspace/inspect_overview
+      - workflows:navigation/inspect_model_entity
+      - workflows:navigation/switch_entity_view
+      - workflows:navigation/navigate_reference
+      - workflows:navigation/inspect_backlinks
+      - workflows:search/search_workspace
+      - workflows:validation/run_validation
+      - workflows:validation/inspect_diagnostic
+      - workflows:artifacts/inspect_generated_artifact
+      - workflows:context/inspect_supporting_artifact
+  - source: specs/001-model-explorer/spec.md#navigation-model
+    targets:
+      - capabilities:navigation/follow_reference
+      - capabilities:navigation/show_backlinks
+      - capabilities:navigation/follow_backlink
+      - capabilities:navigation/preserve_context
+      - entities:semantic_reference
+      - workflows:navigation/navigate_reference
+      - workflows:navigation/inspect_backlinks
+  - source: specs/001-model-explorer/spec.md#search
+    targets:
+      - capabilities:search/search_workspace
+      - capabilities:search/open_search_result
+      - workflows:search/search_workspace
+      - events:search/search_result_selected
+  - source: specs/001-model-explorer/spec.md#validation-and-diagnostics
+    targets:
+      - roles:validator
+      - workflows:validation/run_validation
+      - workflows:validation/inspect_diagnostic
+      - capabilities:validation/run_validation
+      - capabilities:validation/show_diagnostics
+      - capabilities:validation/open_diagnostic_target
+      - entities:diagnostic
+      - interfaces:validator/validator_engine
+      - decisions:reuse_validator_as_semantic_engine
+  - source: specs/001-model-explorer/spec.md#FR-003
+    targets:
+      - capabilities:workspace/load_uploaded_archive
+      - workflows:workspace/load_from_uploaded_archive
+  - source: specs/001-model-explorer/spec.md#FR-004
+    targets:
+      - capabilities:workspace/load_remote_archive
+      - workflows:workspace/load_from_remote_archive_url
+  - source: specs/001-model-explorer/spec.md#FR-013
+    targets:
+      - capabilities:model/index_entities
+      - entities:model_entity
+  - source: specs/001-model-explorer/spec.md#FR-014
+    targets:
+      - capabilities:model/resolve_references
+      - entities:semantic_reference
+  - source: specs/001-model-explorer/spec.md#FR-017
+    targets:
+      - capabilities:model/index_backlinks
+      - capabilities:navigation/show_backlinks
+  - source: specs/001-model-explorer/spec.md#FR-021
+    targets:
+      - capabilities:source/open_yaml
+      - workflows:source/inspect_source_yaml
+      - interfaces:source/source_yaml_reader
+  - source: specs/001-model-explorer/spec.md#FR-029
+    targets:
+      - capabilities:workspace/discover_generated_artifacts
+      - capabilities:artifacts/show_generated_artifact
+      - entities:generated_artifact
+      - workflows:artifacts/inspect_generated_artifact
+  - source: specs/001-model-explorer/information-architecture.md#top-level-workspace-states
+    targets:
+      - entities:workspace
+      - state-machines:workspace/lifecycle
+  - source: specs/001-model-explorer/information-architecture.md#workspace-overview
+    targets:
+      - workflows:workspace/inspect_overview
+      - capabilities:workspace/show_overview
+  - source: specs/001-model-explorer/information-architecture.md#entity-detail
+    targets:
+      - workflows:navigation/inspect_model_entity
+      - entities:model_entity
+      - capabilities:navigation/select_entity
+  - source: specs/001-model-explorer/information-architecture.md#workflow-view
+    targets:
+      - decisions:use_explicit_object_workflow_steps
+      - capabilities:navigation/follow_reference
+  - source: specs/001-model-explorer/information-architecture.md#references-and-backlinks-view
+    targets:
+      - entities:semantic_reference
+      - workflows:navigation/navigate_reference
+      - workflows:navigation/inspect_backlinks
+  - source: specs/001-model-explorer/information-architecture.md#diagnostics-view
+    targets:
+      - entities:diagnostic
+      - workflows:validation/inspect_diagnostic
+      - capabilities:validation/show_diagnostics
+  - source: specs/001-model-explorer/information-architecture.md#generated-artifacts-view
+    targets:
+      - entities:generated_artifact
+      - workflows:artifacts/inspect_generated_artifact
+  - source: specs/001-model-explorer/information-architecture.md#source-yaml-view
+    targets:
+      - workflows:source/inspect_source_yaml
+      - capabilities:source/open_yaml
+  - source: specs/001-model-explorer/information-architecture.md#source-spec-and-compliance-context
+    targets:
+      - entities:supporting_artifact
+      - workflows:context/inspect_supporting_artifact
+      - decisions:keep_supporting_and_generated_artifacts_external
+  - source: specs/001-model-explorer/plan.md#technical-decision-initial-ui-stack
+    targets:
+      - components:react_ui
+      - modules:ui
+      - decisions:keep_react_as_replaceable_ui_adapter
+  - source: specs/001-model-explorer/plan.md#architecture-principle-replaceable-ui
+    targets:
+      - components:explorer_core
+      - components:react_ui
+      - modules:core
+      - modules:ui
+      - decisions:keep_react_as_replaceable_ui_adapter
+  - source: specs/001-model-explorer/plan.md#proposed-layers
+    targets:
+      - modules:core
+      - modules:browser_adapters
+      - modules:validator_integration
+      - components:explorer_core
+      - components:browser_archive_adapter
+      - components:validator_adapter
+  - source: specs/001-model-explorer/plan.md#validator-embedding
+    targets:
+      - roles:validator
+      - interfaces:validator/validator_engine
+      - components:validator_adapter
+      - decisions:reuse_validator_as_semantic_engine
+  - source: specs/001-model-explorer/plan.md#browser-archive-handling
+    targets:
+      - interfaces:archive/archive_input
+      - interfaces:archive/remote_archive_fetch
+      - interfaces:archive/archive_extraction
+      - components:browser_archive_adapter
+  - source: specs/001-model-explorer/notes.md#what-this-experiment-is-trying-to-learn
+    targets:
+      - decisions:keep_supporting_and_generated_artifacts_external
+      - decisions:use_explicit_object_workflow_steps

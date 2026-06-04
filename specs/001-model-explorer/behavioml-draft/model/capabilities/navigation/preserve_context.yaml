@@ -1,0 +1,2 @@
+description: |
+  Maintain selected entity, selected root, source location, navigation history, search query, and diagnostics filter context where possible during navigation and view changes.

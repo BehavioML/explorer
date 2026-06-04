@@ -1,0 +1,51 @@
+entity: workspace
+
+states:
+  - empty
+  - loading_archive
+  - archive_available
+  - root_detected
+  - indexing_model
+  - ready
+  - validation_running
+  - invalid_archive
+  - no_workspace_found
+  - ambiguous_workspace
+  - validation_failed
+
+transitions:
+  - from: empty
+    on: workspace/archive_load_requested
+    to: loading_archive
+  - from: loading_archive
+    on: workspace/archive_bytes_available
+    to: archive_available
+  - from:
+      - loading_archive
+      - archive_available
+    on: workspace/unsupported_archive_identified
+    to: invalid_archive
+  - from: archive_available
+    on: workspace/archive_extraction_blocked
+    to: invalid_archive
+  - from: archive_available
+    on: workspace/root_detected
+    to: root_detected
+  - from: archive_available
+    on: workspace/ambiguous_roots_detected
+    to: ambiguous_workspace
+  - from: archive_available
+    on: workspace/no_root_detected
+    to: no_workspace_found
+  - from: root_detected
+    on: model/model_index_available
+    to: ready
+  - from: ready
+    on: validation/validation_requested
+    to: validation_running
+  - from: validation_running
+    on: validation/diagnostics_refreshed
+    to: ready
+  - from: validation_running
+    on: validation/validation_unavailable
+    to: validation_failed

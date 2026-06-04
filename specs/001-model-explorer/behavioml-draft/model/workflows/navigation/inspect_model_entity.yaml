@@ -1,0 +1,22 @@
+description: |
+  The user selects a BehavioML model entity and inspects its semantic summary, relationships, diagnostics context, source YAML access, and related artifacts.
+
+roles:
+  primary: user
+  participants:
+    - explorer
+
+steps:
+  - from: user
+    to: explorer
+    capability: navigation/select_entity
+    label: Select model entity
+  - from: explorer
+    capability: navigation/preserve_context
+    label: Keep surrounding navigation context
+  - from: explorer
+    capability: navigation/show_backlinks
+    label: Provide incoming reference context
+  - from: explorer
+    capability: validation/show_diagnostics
+    label: Provide contextual diagnostic status

@@ -1,0 +1,20 @@
+description: |
+  The user searches indexed workspace content and navigates from an actionable result when possible.
+
+roles:
+  primary: user
+  participants:
+    - explorer
+
+steps:
+  - from: user
+    to: explorer
+    capability: search/search_workspace
+    label: Submit contextual search query
+  - from: user
+    to: explorer
+    capability: search/open_search_result
+    label: Open actionable search result
+  - from: explorer
+    capability: navigation/preserve_context
+    label: Preserve search and navigation context

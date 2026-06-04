@@ -1,0 +1,14 @@
+description: |
+  Browser-specific adapter boundary for uploaded archive input, public remote archive fetch, and archive extraction mechanics.
+
+implements:
+  capabilities:
+    - workspace/load_uploaded_archive
+    - workspace/load_remote_archive
+    - workspace/extract_archive
+  interfaces:
+    - archive/archive_input
+    - archive/remote_archive_fetch
+    - archive/archive_extraction
+
+belongs_to: browser_adapters

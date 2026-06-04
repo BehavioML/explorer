@@ -1,0 +1,2 @@
+description: |
+  Boundary for extracting supported archive formats into workspace files while isolating decompression mechanics.

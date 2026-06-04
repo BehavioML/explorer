@@ -1,0 +1,13 @@
+description: |
+  Use object-form workflow steps with explicit `from`, optional `to`, `capability`, and `label`.
+
+rationale: |
+  Sequence-diagrammable workflows require explicit role context and must not rely on hidden interactions, implicit current roles, separate interaction lists, or `at` fields.
+
+consequences: |
+  All workflows in this draft use object steps, and observable role-to-role interactions are represented directly in `Workflow.steps`.
+
+affects:
+  - workflows:workspace/load_from_uploaded_archive
+  - workflows:workspace/load_from_remote_archive_url
+  - workflows:validation/run_validation

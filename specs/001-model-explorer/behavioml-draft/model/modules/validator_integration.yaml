@@ -1,0 +1,2 @@
+description: |
+  Integration boundary for embedding or reusing the BehavioML Validator without duplicating validator semantics inside Explorer core.

@@ -1,0 +1,23 @@
+description: |
+  The user inspects a Validator diagnostic and navigates to the affected model entity or source YAML when possible.
+
+roles:
+  primary: user
+  participants:
+    - explorer
+
+steps:
+  - from: user
+    to: explorer
+    capability: validation/show_diagnostics
+    label: Inspect diagnostic
+  - from: user
+    to: explorer
+    capability: validation/open_diagnostic_target
+    label: Open diagnostic target
+  - from: explorer
+    capability: navigation/select_entity
+    label: Select affected entity when available
+  - from: explorer
+    capability: source/open_yaml
+    label: Open source location when available

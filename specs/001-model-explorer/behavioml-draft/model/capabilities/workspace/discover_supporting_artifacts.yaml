@@ -1,0 +1,5 @@
+description: |
+  Discover source specification, compliance, and traceability artifacts when present while keeping them separate from BehavioML model content.
+
+requires:
+  - artifacts/supporting_artifact_reader

@@ -1,0 +1,9 @@
+description: |
+  Accept an uploaded `.tgz` or `.tar.gz` archive as the starting point for read-only workspace loading.
+
+requires:
+  - archive/archive_input
+
+events:
+  - workspace/archive_load_requested
+  - workspace/archive_bytes_available

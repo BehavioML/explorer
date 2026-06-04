@@ -1,0 +1,5 @@
+description: |
+  Navigate from a selected entity backlink to the model entity that holds the incoming reference.
+
+events:
+  - navigation/backlink_followed

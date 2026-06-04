@@ -1,0 +1,2 @@
+description: |
+  The Explorer finds more than one plausible BehavioML workspace root and cannot safely choose automatically.

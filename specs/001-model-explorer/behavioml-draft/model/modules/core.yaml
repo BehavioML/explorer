@@ -1,0 +1,2 @@
+description: |
+  UI-independent ownership boundary for workspace loading semantics, model navigation context, search, diagnostics coordination, and view-model preparation.

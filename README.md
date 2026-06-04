@@ -6,9 +6,9 @@ read-only semantic navigation and review tool for BehavioML workspaces.
 The current implementation is an initial Vite + React + TypeScript vertical
 slice. It establishes application boundaries and supports uploaded archive
 validation, a path-based workspace overview, a minimal path-derived entity
-browser, and a raw read-only selected-entity source view without implementing
-the full Explorer product, remote fetching, or Explorer-owned BehavioML
-semantics.
+browser, diagnostic navigation, and a raw read-only selected-entity source view
+without implementing the full Explorer product, remote fetching, or
+Explorer-owned BehavioML semantics.
 
 ## Current status
 
@@ -29,7 +29,8 @@ Implemented in this first vertical slice:
 - Minimal React UI under `src/ui-react/` for archive selection, loading state,
   workspace overview, grouped path-derived entity browsing, selected entity
   summaries, raw read-only source display, selected-file diagnostics, validation
-  status, diagnostic counts, diagnostic details, and adapter errors.
+  status, diagnostic counts, diagnostic details, exact-path diagnostic navigation,
+  selected diagnostic source context, and adapter errors.
 - Build, typecheck, architecture boundary tests, and non-UI workspace loading
   tests.
 
@@ -37,7 +38,7 @@ Deferred intentionally:
 
 - Remote archive URL fetching/loading.
 - Full semantic entity navigation.
-- Full diagnostic navigation.
+- Line highlighting and semantic field navigation for diagnostics.
 - Search, reference resolution, and backlinks.
 - Generated artifact discovery, supporting artifact discovery, and diagram
   rendering.
@@ -152,9 +153,22 @@ fields, resolve references, infer backlinks, discover generated/supporting
 artifacts, render diagrams, or enable editing.
 
 When Validator diagnostics are available, Explorer also shows diagnostics whose
-file path exactly matches the selected source file path. This is only lightweight
-selected-file context: full diagnostic navigation, field-path navigation,
-references, backlinks, and search remain deferred.
+file path exactly matches the selected source file path. Diagnostic list entries
+with file paths are now clickable: Explorer normalizes the diagnostic file path,
+looks for an exact match in the path-derived entity index, selects that entity
+when one exists, keeps the matching source file focused, and displays the
+selected diagnostic context near the source panel.
+
+Diagnostic matching is exact-path based only. Explorer does not parse YAML or
+JSON contents and does not interpret Validator field paths semantically. Field
+paths are displayed as opaque Validator output, alongside severity, message, and
+file path. If a diagnostic file path is not part of the path-derived entity
+index, Explorer keeps the current entity selection and reports that no matching
+entity was found.
+
+Line highlighting, semantic field navigation, reference resolution, backlinks,
+and search remain deferred. Explorer does not invent line numbers from Validator
+field paths.
 
 ## Architecture layers
 

@@ -3,12 +3,15 @@ import { extractUploadedArchive } from '../adapters/browser';
 import { validateInMemoryModelWorkspace } from '../adapters/validator';
 import {
   BEHAVIOML_MODEL_SCOPE_DIRECTORIES,
+  createDiagnosticNavigationTarget,
   createPathDerivedEntityIndex,
   createSourceFileView,
   createValidatedWorkspaceOverview,
   createWorkspaceOverview,
+  findDiagnosticsForEntity,
   findSelectedEntity,
   getDefaultEntitySelection,
+  type DiagnosticSelection,
   type DiagnosticViewModel,
   type PathDerivedEntityIndex,
   type PathDerivedEntitySelection,
@@ -36,6 +39,7 @@ export function App() {
   const [workspaceFiles, setWorkspaceFiles] = useState<readonly WorkspaceFileEntry[]>([]);
   const [entityIndex, setEntityIndex] = useState<PathDerivedEntityIndex>();
   const [selectedEntity, setSelectedEntity] = useState<PathDerivedEntitySelection>();
+  const [selectedDiagnostic, setSelectedDiagnostic] = useState<DiagnosticSelection>();
 
   async function handleArchiveSelected(file: File | undefined) {
     if (!file) {
@@ -46,6 +50,7 @@ export function App() {
     setWorkspaceFiles([]);
     setEntityIndex(undefined);
     setSelectedEntity(undefined);
+    setSelectedDiagnostic(undefined);
     setStatus({ kind: 'loading', message: `Extracting ${file.name} in the browser...` });
 
     try {
@@ -107,6 +112,24 @@ export function App() {
 
   const validation = status.kind === 'validated' ? status.validation : undefined;
 
+  function handleEntitySelected(selection: PathDerivedEntitySelection) {
+    setSelectedEntity(selection);
+    setSelectedDiagnostic(undefined);
+  }
+
+  function handleDiagnosticSelected(diagnostic: DiagnosticViewModel) {
+    if (!entityIndex || !diagnostic.filePath) {
+      return;
+    }
+
+    const navigationTarget = createDiagnosticNavigationTarget(entityIndex, diagnostic);
+    setSelectedDiagnostic(navigationTarget);
+
+    if (navigationTarget.entityKey) {
+      setSelectedEntity(navigationTarget.entityKey);
+    }
+  }
+
   return (
     <main className="app-shell">
       <section className="hero-panel" aria-labelledby="explorer-title">
@@ -148,8 +171,9 @@ export function App() {
           diagnostics={validation?.diagnostics ?? []}
           files={workspaceFiles}
           index={entityIndex}
+          selectedDiagnostic={selectedDiagnostic}
           selectedEntity={selectedEntity}
-          onSelectEntity={setSelectedEntity}
+          onSelectEntity={handleEntitySelected}
         />
       ) : null}
 
@@ -158,7 +182,13 @@ export function App() {
         <h2 id="validation-status-title">Validation status</h2>
         <p className={`status-message status-message--${status.kind}`}>{status.message}</p>
 
-        {validation ? <ValidationDiagnostics validation={validation} /> : null}
+        {validation ? (
+          <ValidationDiagnostics
+            selectedDiagnostic={selectedDiagnostic}
+            validation={validation}
+            onSelectDiagnostic={handleDiagnosticSelected}
+          />
+        ) : null}
 
         <p className="status-note">
           Archive extraction lives under <code>src/adapters/browser</code>; Validator integration is
@@ -232,18 +262,20 @@ function EntityBrowser({
   diagnostics,
   files,
   index,
+  selectedDiagnostic,
   selectedEntity,
   onSelectEntity,
 }: {
   readonly diagnostics: readonly DiagnosticViewModel[];
   readonly files: readonly WorkspaceFileEntry[];
   readonly index: PathDerivedEntityIndex;
+  readonly selectedDiagnostic: DiagnosticSelection | undefined;
   readonly selectedEntity: PathDerivedEntitySelection;
   readonly onSelectEntity: (selection: PathDerivedEntitySelection) => void;
 }) {
   const selected = findSelectedEntity(index, selectedEntity);
   const sourceView = selected ? createSourceFileView(files, selected) : undefined;
-  const selectedDiagnostics = sourceView ? diagnosticsForFile(diagnostics, sourceView.filePath) : [];
+  const selectedDiagnostics = selected ? findDiagnosticsForEntity(diagnostics, selected) : [];
 
   return (
     <section className="entity-browser-panel" aria-labelledby="entity-browser-title">
@@ -271,14 +303,18 @@ function EntityBrowser({
             <SourcePanel
               diagnostics={selectedDiagnostics}
               entity={selected}
+              selectedDiagnostic={selectedDiagnostic}
               sourceView={sourceView}
             />
           </div>
         </div>
       ) : (
-        <p className="empty-entities">
-          No path-derived model entities were found in known BehavioML scope directories.
-        </p>
+        <div className="entity-detail-stack">
+          <p className="empty-entities">
+            No path-derived model entities were found in known BehavioML scope directories.
+          </p>
+          <SelectedDiagnosticContext selection={selectedDiagnostic} />
+        </div>
       )}
     </section>
   );
@@ -396,10 +432,12 @@ function SelectedEntitySummary({
 function SourcePanel({
   diagnostics,
   entity,
+  selectedDiagnostic,
   sourceView,
 }: {
   readonly diagnostics: readonly DiagnosticViewModel[];
   readonly entity: PathDerivedModelEntity | undefined;
+  readonly selectedDiagnostic: DiagnosticSelection | undefined;
   readonly sourceView: SourceFileViewModel | undefined;
 }) {
   if (!entity) {
@@ -414,6 +452,7 @@ function SourcePanel({
         <p className="missing-source">
           Source file <code>{entity.filePath}</code> is not available in the extracted workspace.
         </p>
+        <SelectedDiagnosticContext selection={selectedDiagnostic} />
       </section>
     );
   }
@@ -448,6 +487,7 @@ function SourcePanel({
         </div>
       </dl>
 
+      <SelectedDiagnosticContext selection={selectedDiagnostic} />
       <SelectedSourceDiagnostics diagnostics={diagnostics} />
 
       <pre className="source-code"><code>{sourceView.content}</code></pre>
@@ -479,17 +519,66 @@ function SelectedSourceDiagnostics({
   );
 }
 
-function diagnosticsForFile(
-  diagnostics: readonly DiagnosticViewModel[],
-  filePath: string,
-): readonly DiagnosticViewModel[] {
-  return diagnostics.filter((diagnostic) => diagnostic.filePath === filePath);
+function SelectedDiagnosticContext({
+  selection,
+}: {
+  readonly selection: DiagnosticSelection | undefined;
+}) {
+  if (!selection) {
+    return null;
+  }
+
+  const { diagnostic } = selection;
+
+  return (
+    <aside className="selected-diagnostic-context" aria-label="Selected diagnostic context">
+      <h4>Selected diagnostic</h4>
+      {selection.status === 'unmatched_file_path' ? (
+        <p className="diagnostic-navigation-note">
+          This diagnostic file is not part of the path-derived entity index. The current entity
+          selection is unchanged.
+        </p>
+      ) : null}
+      <dl className="selected-diagnostic-list">
+        <div>
+          <dt>Severity</dt>
+          <dd>
+            <span className={`severity severity--${diagnostic.severity}`}>
+              {diagnostic.severity}
+            </span>
+          </dd>
+        </div>
+        <div>
+          <dt>Message</dt>
+          <dd>{diagnostic.message}</dd>
+        </div>
+        <div>
+          <dt>File path</dt>
+          <dd>
+            {diagnostic.filePath ? <code>{diagnostic.filePath}</code> : 'No file path reported'}
+          </dd>
+        </div>
+        {diagnostic.fieldPath ? (
+          <div>
+            <dt>Field path</dt>
+            <dd>
+              <code>{diagnostic.fieldPath}</code>
+            </dd>
+          </div>
+        ) : null}
+      </dl>
+    </aside>
+  );
 }
 
 function ValidationDiagnostics({
+  selectedDiagnostic,
   validation,
+  onSelectDiagnostic,
 }: {
+  readonly selectedDiagnostic: DiagnosticSelection | undefined;
   readonly validation: ValidationResultViewModel;
+  readonly onSelectDiagnostic: (diagnostic: DiagnosticViewModel) => void;
 }) {
   return (
     <div className="diagnostics-panel">
@@ -502,7 +591,9 @@ function ValidationDiagnostics({
           {validation.diagnostics.map((diagnostic, index) => (
             <DiagnosticItem
               diagnostic={diagnostic}
+              isSelected={selectedDiagnostic?.diagnostic === diagnostic}
               key={`${diagnostic.filePath ?? 'workspace'}-${index}`}
+              onSelect={diagnostic.filePath ? () => onSelectDiagnostic(diagnostic) : undefined}
             />
           ))}
         </ul>
@@ -513,13 +604,42 @@ function ValidationDiagnostics({
   );
 }
 
-function DiagnosticItem({ diagnostic }: { readonly diagnostic: DiagnosticViewModel }) {
-  return (
-    <li className="diagnostic-item">
+function DiagnosticItem({
+  diagnostic,
+  isSelected = false,
+  onSelect,
+}: {
+  readonly diagnostic: DiagnosticViewModel;
+  readonly isSelected?: boolean;
+  readonly onSelect?: () => void;
+}) {
+  const content = (
+    <>
       <span className={`severity severity--${diagnostic.severity}`}>{diagnostic.severity}</span>
       <span className="diagnostic-message">{diagnostic.message}</span>
       {diagnostic.filePath ? <code>{diagnostic.filePath}</code> : null}
       {diagnostic.fieldPath ? <code>{diagnostic.fieldPath}</code> : null}
+    </>
+  );
+
+  if (!onSelect) {
+    return <li className="diagnostic-item">{content}</li>;
+  }
+
+  return (
+    <li>
+      <button
+        className={
+          isSelected
+            ? 'diagnostic-item diagnostic-item--button diagnostic-item--selected'
+            : 'diagnostic-item diagnostic-item--button'
+        }
+        type="button"
+        aria-pressed={isSelected}
+        onClick={onSelect}
+      >
+        {content}
+      </button>
     </li>
   );
 }

@@ -1,6 +1,6 @@
 # Level-0 Spec Kit -> BehavioML Experiment Notes
 
-This feature is being used as a level-0 experiment for integrating Spec Kit-style source specifications with BehavioML model derivation and review.
+This feature is being used as a level-0 ChatGPT/Codex-native experiment for integrating Spec Kit-inspired source specifications, planning artifacts, command-shaped prompts, and BehavioML model derivation/review.
 
 ## What this experiment is trying to learn
 
@@ -12,9 +12,10 @@ This feature is being used as a level-0 experiment for integrating Spec Kit-styl
 
 ## What is intentionally not automated yet
 
-- No `/behavioml.derive`, `/behavioml.review`, `/behavioml.validate`, `/behavioml.diagrams`, or `/behavioml.traceability` command exists here.
+- No `/behavioml.derive`, `/behavioml.review`, `/behavioml.validate`, `/behavioml.diagrams`, `/behavioml.traceability`, or `/behavioml.promote` executable command exists here.
+- Command-shaped prompt files exist as reviewable Markdown artifacts, not installed tooling.
 - No Spec Kit extension is packaged or registered.
-- No `.specify/extensions/` directory is added.
+- No `.specify/` directory is added.
 - No script invokes a BehavioML validator or diagram generator.
 - No model coverage or traceability report is generated automatically.
 - No full BehavioML model is generated from the source spec.
@@ -41,8 +42,8 @@ A future extension would be justified if this manual workflow repeatedly shows t
 
 ## Why this is not yet level 1 or level 2
 
-This is not level 1 because there are no local Spec Kit-style commands or prompt templates in the repository yet.
+This is not level 1 because the repository has command-shaped prompt files, but no local reusable command wrappers or installed prompt runner yet.
 
 This is not level 2 because there is no reusable extension package, no packaged command set, no validator/generator script integration, and no automated traceability or coverage tooling.
 
-At level 0, the repository only defines conventions, placeholder artifacts, and documentation for a manual workflow.
+At level 0, the repository only defines conventions, placeholder artifacts, command-shaped prompt files, and documentation for a manual workflow.

@@ -300,10 +300,10 @@ function EntityBrowser({
           />
           <div className="entity-detail-stack">
             <SelectedEntitySummary entity={selected} diagnosticCount={selectedDiagnostics.length} />
+            <SelectedDiagnosticContext selection={selectedDiagnostic} />
             <SourcePanel
               diagnostics={selectedDiagnostics}
               entity={selected}
-              selectedDiagnostic={selectedDiagnostic}
               sourceView={sourceView}
             />
           </div>
@@ -432,12 +432,10 @@ function SelectedEntitySummary({
 function SourcePanel({
   diagnostics,
   entity,
-  selectedDiagnostic,
   sourceView,
 }: {
   readonly diagnostics: readonly DiagnosticViewModel[];
   readonly entity: PathDerivedModelEntity | undefined;
-  readonly selectedDiagnostic: DiagnosticSelection | undefined;
   readonly sourceView: SourceFileViewModel | undefined;
 }) {
   if (!entity) {
@@ -452,7 +450,6 @@ function SourcePanel({
         <p className="missing-source">
           Source file <code>{entity.filePath}</code> is not available in the extracted workspace.
         </p>
-        <SelectedDiagnosticContext selection={selectedDiagnostic} />
       </section>
     );
   }
@@ -487,7 +484,6 @@ function SourcePanel({
         </div>
       </dl>
 
-      <SelectedDiagnosticContext selection={selectedDiagnostic} />
       <SelectedSourceDiagnostics diagnostics={diagnostics} />
 
       <pre className="source-code"><code>{sourceView.content}</code></pre>

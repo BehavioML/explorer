@@ -205,6 +205,7 @@ code {
 .diagnostic-item {
   display: grid;
   gap: 0.5rem;
+  min-width: 0;
   padding: 1rem;
   border: 1px solid #dce3f1;
   border-radius: 14px;
@@ -272,6 +273,7 @@ code {
 }
 
 .entity-browser-panel {
+  min-width: 0;
   padding: 2rem;
   border: 1px solid #dce3f1;
   border-radius: 24px;
@@ -307,12 +309,14 @@ code {
   grid-template-columns: minmax(16rem, 0.95fr) minmax(18rem, 1.05fr);
   gap: 1rem;
   align-items: start;
+  min-width: 0;
   margin-top: 1.5rem;
 }
 
 .entity-scope-list {
   display: grid;
   gap: 0.75rem;
+  min-width: 0;
 }
 
 .entity-scope-group {
@@ -381,9 +385,20 @@ code {
   overflow-wrap: anywhere;
 }
 
+.entity-button span,
+.entity-button code,
+.entity-summary h3,
+.entity-summary-list code,
+.source-metadata-list code,
+.selected-diagnostic-list code,
+.diagnostic-item code,
+.missing-source code {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 .entity-summary {
-  position: sticky;
-  top: 1rem;
+  min-width: 0;
   padding: 1.25rem;
   border: 1px solid #dce3f1;
   border-radius: 18px;
@@ -434,14 +449,11 @@ code {
   .entity-browser-heading {
     display: grid;
   }
-
-  .entity-summary {
-    position: static;
-  }
 }
 
 .entity-detail-stack {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
   min-width: 0;
 }
@@ -450,6 +462,8 @@ code {
   display: grid;
   gap: 1rem;
   min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   padding: 1.25rem;
   border: 1px solid #dce3f1;
   border-radius: 18px;
@@ -471,6 +485,7 @@ code {
 .source-metadata-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  min-width: 0;
   gap: 0.75rem;
   margin: 0;
 }
@@ -498,6 +513,7 @@ code {
 .selected-source-diagnostics {
   display: grid;
   gap: 0.75rem;
+  min-width: 0;
 }
 
 .diagnostic-list--compact {
@@ -505,6 +521,7 @@ code {
 }
 
 .source-code {
+  max-width: 100%;
   max-height: 32rem;
   margin: 0;
   padding: 1rem;
@@ -554,6 +571,8 @@ code {
 .selected-diagnostic-context {
   display: grid;
   gap: 0.75rem;
+  min-width: 0;
+  max-width: 100%;
   padding: 1rem;
   border: 1px solid #c7d5ee;
   border-radius: 14px;

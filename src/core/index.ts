@@ -27,7 +27,9 @@ export type {
   ValidationResultViewModel,
 } from './diagnostics';
 export { createSourceFileView, findSourceFileForEntity } from './sourceFileView';
+export { normalizeSearchQuery, searchWorkspace } from './search';
 export type { SourceFileViewModel } from './sourceFileView';
+export type { SearchQuery, SearchResult, SearchResultKind, SearchWorkspaceInput } from './search';
 export {
   countWorkspaceScopes,
   createValidatedWorkspaceOverview,

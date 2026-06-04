@@ -610,3 +610,150 @@ code {
   color: #202c43;
   overflow-wrap: anywhere;
 }
+
+.entity-browser-sidebar {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.search-panel {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+  border: 1px solid #dce3f1;
+  border-radius: 18px;
+  background: #fbfcff;
+}
+
+.search-panel h3 {
+  margin: 0 0 0.35rem;
+  color: #202c43;
+  font-size: 1rem;
+}
+
+.search-panel p,
+.empty-search-results,
+.search-result-count {
+  margin: 0;
+  color: #52617a;
+  line-height: 1.55;
+}
+
+.search-input-label {
+  display: grid;
+  gap: 0.35rem;
+  color: #31415f;
+  font-weight: 800;
+}
+
+.search-input-label input {
+  width: 100%;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid #c7d5ee;
+  border-radius: 12px;
+  color: #172033;
+  background: #ffffff;
+}
+
+.search-input-label input:focus {
+  border-color: #4f7dd3;
+  outline: none;
+}
+
+.search-results {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.search-results ul {
+  display: grid;
+  gap: 0.5rem;
+  max-height: 28rem;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.search-result-button {
+  display: grid;
+  gap: 0.3rem;
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #dce3f1;
+  border-radius: 14px;
+  color: #31415f;
+  background: #ffffff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.search-result-button:hover,
+.search-result-button:focus-visible {
+  border-color: #91a3c4;
+  outline: none;
+}
+
+.search-result-button--selected {
+  border-color: #4f7dd3;
+  background: #eef3ff;
+}
+
+.search-result-kind,
+.search-result-line {
+  width: fit-content;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  color: #123f73;
+  background: #e2f0ff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.search-result-match {
+  color: #52617a;
+  overflow-wrap: anywhere;
+}
+
+.selected-search-context {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid #c7d5ee;
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.search-navigation-note {
+  padding: 0.75rem;
+  border-radius: 12px;
+  color: #7a4a00;
+  background: #fff4d8;
+}
+
+.selected-search-list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.selected-search-list div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.selected-search-list dt {
+  color: #52617a;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.selected-search-list dd {
+  margin: 0;
+  color: #202c43;
+  overflow-wrap: anywhere;
+}

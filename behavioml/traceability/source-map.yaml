@@ -1,0 +1,9 @@
+# Root experimental traceability map.
+#
+# Mappings may later connect source specs or SDD artifacts to accepted
+# BehavioML model elements under behavioml/model/.
+#
+# Traceability is external for now and should not be treated as a BehavioML
+# metamodel field or as source-of-truth model content.
+
+mappings: []

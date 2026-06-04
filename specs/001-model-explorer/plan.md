@@ -4,7 +4,7 @@
 
 Initial technical plan for the future BehavioML Model Explorer.
 
-The product scope is defined in `specs/001-model-explorer/spec.md`, and information organization is refined in `specs/001-model-explorer/information-architecture.md`.
+The product scope is defined in `specs/001-model-explorer/spec.md`, and future UI direction is refined through information architecture, interaction-model, and wireframe documents.
 
 This plan records the initial technical constraints and stack decision. It does not define implementation tasks, API contracts, storage schemas, or detailed component design yet.
 
@@ -12,11 +12,32 @@ This plan records the initial technical constraints and stack decision. It does 
 
 - Source product specification: `specs/001-model-explorer/spec.md`
 - Information architecture: `specs/001-model-explorer/information-architecture.md`
+- Interaction model: `specs/001-model-explorer/interaction-model.md`
+- Product wireframes: `specs/001-model-explorer/wireframes.md`
 - Experiment notes: `specs/001-model-explorer/notes.md`
 - Feature-local BehavioML draft: `specs/001-model-explorer/behavioml-draft/model/` once derived
 - Feature-local traceability map: `specs/001-model-explorer/behavioml-draft/traceability/source-map.yaml`
 - Accepted system model: `behavioml/model/` once reviewed content is promoted
 - Repo-wide command-shaped prompts: `prompts/commands/`
+
+
+## Lessons Learned
+
+The Explorer has now passed through report-style, dashboard-like, IDE-inspired, and workbench-oriented UI iterations. Those iterations clarified that future major UI work should start from agreed product structure before implementation begins.
+
+Future major UI work should follow this sequence:
+
+```text
+Requirements
+  -> Information Architecture
+  -> Interaction Model
+  -> Wireframes
+  -> Implementation
+```
+
+This workflow was added because prior iterations exposed product-shape questions while implementation was already underway. Capturing requirements, information hierarchy, interaction behavior, and layout intent first should reduce rework, keep source/diagram/relationship navigation central, and prevent supporting concerns such as validation status or inspector metadata from dominating the product.
+
+For the next UI phase, the Explorer should be treated as a workbench-style navigation tool for a BehavioML workspace rather than as a linear report or static dashboard. Source, diagrams, and relationships are primary surfaces; inspector metadata is contextual; validation is a supporting concern that should remain actionable and connected to model context.
 
 ## Technical decision: initial UI stack
 

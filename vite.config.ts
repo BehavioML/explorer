@@ -6,7 +6,8 @@ const browserNodeFsShimPath = new URL(
   import.meta.url,
 ).pathname;
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  base: command === 'build' ? '/explorer/' : '/',
   plugins: [react()],
   resolve: {
     alias: {
@@ -14,4 +15,4 @@ export default defineConfig({
       'node:path': 'path-browserify',
     },
   },
-});
+}));

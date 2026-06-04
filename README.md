@@ -218,7 +218,9 @@ does not push built assets to a `gh-pages` branch.
 The Pages workflow runs on pushes to `main` and manual `workflow_dispatch`
 triggers, then installs dependencies, typechecks, runs tests, builds the app,
 uploads `dist/` with `actions/upload-pages-artifact`, and deploys it with
-`actions/deploy-pages`.
+`actions/deploy-pages`. Production Vite builds use the GitHub Pages repository
+base path `/explorer/`, so generated asset URLs resolve under
+`/explorer/assets/`.
 
 ## Running the scaffold
 

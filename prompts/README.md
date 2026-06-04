@@ -86,17 +86,17 @@ derive
     -> validate
     -> review
     -> refine
-    -> validate again
+    -> validate
     -> promote
 ```
 
-Recommended meaning:
+Command ownership:
 
-- `derive`: create or update a feature-local draft from source artifacts.
-- `validate`: run official validation or clearly labeled fallback checks.
-- `review`: assess behavior-first modeling quality and readiness.
-- `refine`: apply focused modeling-quality fixes to an existing draft.
-- `promote`: move reviewed draft content into the accepted model only when explicitly requested.
+- `derive`: creates or updates a feature-local draft from approved source artifacts; it owns behavior-first derivation and gap reporting, not validation, review, refinement, or promotion.
+- `validate`: validates a draft or accepted model before review, refinement, promotion, planning, or implementation; it owns validator discovery, official validator execution, clearly labeled fallback structural checks, traceability validation, and validation reporting, not semantic modeling review.
+- `review`: assesses behavior-first modeling quality, source coverage, boundaries, event discipline, reference integrity, traceability health, and readiness; it owns semantic modeling review, not automated validation or model edits.
+- `refine`: applies focused improvements to an existing draft using validation and review findings; it owns incremental draft cleanup while preserving traceability, not regeneration from scratch or promotion.
+- `promote`: moves reviewed and validated draft content into the accepted model; it owns promotion eligibility checks, accepted-model updates, traceability consistency, and explaining what remains draft-only.
 
 Profiles can be composed with commands when the source system belongs to a reusable class.
 

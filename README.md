@@ -5,8 +5,9 @@ read-only semantic navigation and review tool for BehavioML workspaces.
 
 The current implementation is an initial Vite + React + TypeScript vertical
 slice. It establishes application boundaries and supports uploaded archive
-validation plus a semantic workspace overview without implementing the full
-Explorer product, remote fetching, or Explorer-owned BehavioML semantics.
+validation, a path-based workspace overview, and a minimal path-derived entity
+browser without implementing the full Explorer product, remote fetching, or
+Explorer-owned BehavioML semantics.
 
 ## Current status
 
@@ -15,8 +16,8 @@ Implemented in this first vertical slice:
 - Vite + React + TypeScript application shell.
 - Framework-independent `src/core/` types for workspace files, archive extraction
   results, workspace root detection results, load/validation status, validation
-  view models, path-based workspace overview models, application errors, and
-  command/port boundaries.
+  view models, path-based workspace overview models, path-derived entity index
+  and selection helpers, application errors, and command/port boundaries.
 - Browser-only uploaded `.tgz` / `.tar.gz` archive extraction under
   `src/adapters/browser/`.
 - Minimal workspace root detection for model roots at the archive root or under
@@ -24,16 +25,17 @@ Implemented in this first vertical slice:
 - Validator integration boundary under `src/adapters/validator/`, with the
   Validator package isolated to that adapter.
 - Minimal React UI under `src/ui-react/` for archive selection, loading state,
-  workspace overview, validation status, diagnostic counts, diagnostic details,
-  and adapter errors.
+  workspace overview, grouped path-derived entity browsing, selected entity
+  summaries, validation status, diagnostic counts, diagnostic details, and
+  adapter errors.
 - Build, typecheck, architecture boundary tests, and non-UI workspace loading
   tests.
 
 Deferred intentionally:
 
 - Remote archive URL fetching/loading.
-- Entity browser and full semantic navigation.
-- Search and backlinks.
+- Full semantic entity navigation.
+- Search, reference resolution, and backlinks.
 - Generated artifact discovery, supporting artifact discovery, and diagram
   rendering.
 - Editing.
@@ -106,8 +108,30 @@ artifacts, supporting artifacts, or model semantics.
 
 The BehavioML Validator remains the authority for parsing, model loading,
 reference resolution, validation rules, diagnostics semantics, summaries, and
-coverage. Entity browsing, search, backlinks, generated artifact discovery,
-supporting artifact discovery, diagram rendering, and editing remain deferred.
+coverage. Search, reference resolution, backlinks, generated artifact discovery,
+supporting artifact discovery, diagram rendering, editing, and semantic entity
+metadata remain deferred.
+
+## Entity browser skeleton
+
+After archive extraction, Explorer also builds a minimal entity index from the
+validated in-memory workspace file paths. The browser groups model files under
+known BehavioML scope directories, shows a count per scope, and lets users select
+an entity to see a path-derived summary containing scope, identity, display name,
+file path, extension, and a minimal exact-file diagnostic count when Validator
+diagnostics are available.
+
+Entity identities are derived only from workspace-relative paths. For example,
+`capabilities/connection/send_initial.yaml` becomes scope `capabilities` and
+identity `connection/send_initial`. The entity browser recognizes `.yaml`,
+`.yml`, and `.json` files under known scope directories and ignores unknown
+directories plus non-model files.
+
+These identities are non-authoritative beyond the current workspace file
+structure. Explorer does not parse YAML or JSON contents for entity fields,
+references, backlinks, generated artifacts, supporting artifacts, diagrams, or
+semantic metadata. If Explorer needs semantic entity metadata later, that data
+should come from Validator API output rather than an Explorer-owned parser.
 
 ## Architecture layers
 

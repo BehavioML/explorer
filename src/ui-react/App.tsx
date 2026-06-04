@@ -3,9 +3,15 @@ import { extractUploadedArchive } from '../adapters/browser';
 import { validateInMemoryModelWorkspace } from '../adapters/validator';
 import {
   BEHAVIOML_MODEL_SCOPE_DIRECTORIES,
+  createPathDerivedEntityIndex,
   createValidatedWorkspaceOverview,
   createWorkspaceOverview,
+  findSelectedEntity,
+  getDefaultEntitySelection,
   type DiagnosticViewModel,
+  type PathDerivedEntityIndex,
+  type PathDerivedEntitySelection,
+  type PathDerivedModelEntity,
   type ValidationResultViewModel,
   type WorkspaceOverviewValidationStatus,
   type WorkspaceOverviewViewModel,
@@ -23,6 +29,8 @@ export function App() {
     message: 'No workspace loaded. Choose a .tgz or .tar.gz archive to validate it in memory.',
   });
   const [workspaceOverview, setWorkspaceOverview] = useState<WorkspaceOverviewViewModel>();
+  const [entityIndex, setEntityIndex] = useState<PathDerivedEntityIndex>();
+  const [selectedEntity, setSelectedEntity] = useState<PathDerivedEntitySelection>();
 
   async function handleArchiveSelected(file: File | undefined) {
     if (!file) {
@@ -30,10 +38,15 @@ export function App() {
     }
 
     setWorkspaceOverview(undefined);
+    setEntityIndex(undefined);
+    setSelectedEntity(undefined);
     setStatus({ kind: 'loading', message: `Extracting ${file.name} in the browser...` });
 
     try {
       const workspace = await extractUploadedArchive({ kind: 'uploaded_archive', file });
+      const nextEntityIndex = createPathDerivedEntityIndex(workspace.files);
+      setEntityIndex(nextEntityIndex);
+      setSelectedEntity(getDefaultEntitySelection(nextEntityIndex));
       setWorkspaceOverview(
         createWorkspaceOverview({
           sourceLabel: workspace.sourceLabel,
@@ -123,6 +136,15 @@ export function App() {
 
       {workspaceOverview ? <WorkspaceOverview overview={workspaceOverview} /> : null}
 
+      {entityIndex ? (
+        <EntityBrowser
+          diagnostics={validation?.diagnostics ?? []}
+          index={entityIndex}
+          selectedEntity={selectedEntity}
+          onSelectEntity={setSelectedEntity}
+        />
+      ) : null}
+
       <section className="status-panel" aria-labelledby="validation-status-title">
         <p className="eyebrow">Validation</p>
         <h2 id="validation-status-title">Validation status</h2>
@@ -196,6 +218,168 @@ function ScopeCountList({ overview }: { readonly overview: WorkspaceOverviewView
       ))}
     </ul>
   );
+}
+
+function EntityBrowser({
+  diagnostics,
+  index,
+  selectedEntity,
+  onSelectEntity,
+}: {
+  readonly diagnostics: readonly DiagnosticViewModel[];
+  readonly index: PathDerivedEntityIndex;
+  readonly selectedEntity: PathDerivedEntitySelection;
+  readonly onSelectEntity: (selection: PathDerivedEntitySelection) => void;
+}) {
+  const selected = findSelectedEntity(index, selectedEntity);
+  const selectedDiagnostics = selected ? diagnosticsForFile(diagnostics, selected.filePath) : [];
+
+  return (
+    <section className="entity-browser-panel" aria-labelledby="entity-browser-title">
+      <div className="entity-browser-heading">
+        <div>
+          <p className="eyebrow">Entities</p>
+          <h2 id="entity-browser-title">Path-derived entity browser</h2>
+          <p>
+            Entities below are inferred from workspace-relative paths under known BehavioML scope
+            directories. Explorer does not parse YAML or JSON content for semantic fields.
+          </p>
+        </div>
+        <strong className="entity-total">{index.totalEntities} total</strong>
+      </div>
+
+      {index.totalEntities > 0 ? (
+        <div className="entity-browser-layout">
+          <EntityScopeList
+            index={index}
+            selectedEntity={selectedEntity}
+            onSelectEntity={onSelectEntity}
+          />
+          <SelectedEntitySummary entity={selected} diagnosticCount={selectedDiagnostics.length} />
+        </div>
+      ) : (
+        <p className="empty-entities">
+          No path-derived model entities were found in known BehavioML scope directories.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function EntityScopeList({
+  index,
+  selectedEntity,
+  onSelectEntity,
+}: {
+  readonly index: PathDerivedEntityIndex;
+  readonly selectedEntity: PathDerivedEntitySelection;
+  readonly onSelectEntity: (selection: PathDerivedEntitySelection) => void;
+}) {
+  return (
+    <div className="entity-scope-list" aria-label="Path-derived entities grouped by scope">
+      {index.scopes.map((scopeGroup) => (
+        <section className="entity-scope-group" key={scopeGroup.scope}>
+          <h3>
+            <span>{scopeGroup.scope}</span>
+            <strong>{scopeGroup.entities.length}</strong>
+          </h3>
+
+          {scopeGroup.entities.length > 0 ? (
+            <ul>
+              {scopeGroup.entities.map((entity) => {
+                const isSelected =
+                  selectedEntity?.scope === entity.scope &&
+                  selectedEntity.identity === entity.identity;
+
+                return (
+                  <li key={`${entity.scope}:${entity.identity}`}>
+                    <button
+                      className={
+                        isSelected ? 'entity-button entity-button--selected' : 'entity-button'
+                      }
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() =>
+                        onSelectEntity({ scope: entity.scope, identity: entity.identity })
+                      }
+                    >
+                      <span>{entity.displayName}</span>
+                      <code>{entity.identity}</code>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p>No entities in this scope.</p>
+          )}
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function SelectedEntitySummary({
+  entity,
+  diagnosticCount,
+}: {
+  readonly entity: PathDerivedModelEntity | undefined;
+  readonly diagnosticCount: number;
+}) {
+  if (!entity) {
+    return (
+      <aside className="entity-summary" aria-label="Selected entity summary">
+        <p className="empty-entities">Select an entity to see its path-derived summary.</p>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="entity-summary" aria-label="Selected entity summary">
+      <p className="eyebrow">Selected entity</p>
+      <h3>{entity.displayName}</h3>
+      <p>
+        This summary is derived from the entity file path only. Semantic metadata, references, and
+        backlinks remain deferred to Validator-backed Explorer capabilities.
+      </p>
+
+      <dl className="entity-summary-list">
+        <div>
+          <dt>Scope</dt>
+          <dd>{entity.scope}</dd>
+        </div>
+        <div>
+          <dt>Identity</dt>
+          <dd>{entity.identity}</dd>
+        </div>
+        <div>
+          <dt>Display name</dt>
+          <dd>{entity.displayName}</dd>
+        </div>
+        <div>
+          <dt>File path</dt>
+          <dd>
+            <code>{entity.filePath}</code>
+          </dd>
+        </div>
+        <div>
+          <dt>Extension</dt>
+          <dd>{entity.extension}</dd>
+        </div>
+        <div>
+          <dt>Diagnostics for file</dt>
+          <dd>{diagnosticCount}</dd>
+        </div>
+      </dl>
+    </aside>
+  );
+}
+
+function diagnosticsForFile(
+  diagnostics: readonly DiagnosticViewModel[],
+  filePath: string,
+): readonly DiagnosticViewModel[] {
+  return diagnostics.filter((diagnostic) => diagnostic.filePath === filePath);
 }
 
 function ValidationDiagnostics({

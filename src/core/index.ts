@@ -1,4 +1,19 @@
 export type { ValidateWorkspaceCommand, ValidatorPort } from './commands';
+export {
+  createPathDerivedEntityIndex,
+  createPathDerivedEntityKey,
+  findSelectedEntity,
+  getDefaultEntitySelection,
+} from './entityIndex';
+export type {
+  ModelEntityExtension,
+  ModelEntityScope,
+  PathDerivedEntityIndex,
+  PathDerivedEntityKey,
+  PathDerivedEntityScopeGroup,
+  PathDerivedEntitySelection,
+  PathDerivedModelEntity,
+} from './entityIndex';
 export type { DiagnosticSeverity, DiagnosticViewModel, ValidationResultViewModel } from './diagnostics';
 export {
   countWorkspaceScopes,

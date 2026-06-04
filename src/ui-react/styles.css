@@ -1,0 +1,149 @@
+:root {
+  color: #172033;
+  background: #f5f7fb;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.app-shell {
+  display: grid;
+  gap: 1rem;
+  width: min(960px, calc(100vw - 2rem));
+  margin: 0 auto;
+  padding: 4rem 0;
+}
+
+.hero-panel,
+.workspace-panel,
+.status-panel {
+  border: 1px solid #dce3f1;
+  border-radius: 24px;
+  background: #ffffff;
+  box-shadow: 0 24px 60px rgb(18 35 70 / 8%);
+}
+
+.hero-panel {
+  padding: 3rem;
+}
+
+.workspace-panel,
+.status-panel {
+  padding: 2rem;
+}
+
+.workspace-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2rem;
+  align-items: center;
+}
+
+.eyebrow {
+  margin: 0 0 0.5rem;
+  color: #52617a;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 1rem;
+  font-size: clamp(2.4rem, 6vw, 4.8rem);
+  line-height: 0.95;
+}
+
+h2 {
+  margin-bottom: 0.75rem;
+  color: #202c43;
+}
+
+.hero-copy,
+.workspace-panel p,
+.status-note {
+  color: #52617a;
+  line-height: 1.65;
+}
+
+.upload-placeholder {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 260px;
+  padding: 1.25rem;
+  border: 1px dashed #91a3c4;
+  border-radius: 18px;
+  color: #31415f;
+  background: #f8faff;
+  cursor: pointer;
+}
+
+.upload-placeholder span {
+  font-weight: 700;
+}
+
+.status-message {
+  padding: 1rem;
+  border-radius: 14px;
+  font-weight: 700;
+}
+
+.status-message--idle {
+  color: #31415f;
+  background: #eef3ff;
+}
+
+.status-message--stubbed {
+  color: #7a4a00;
+  background: #fff4d8;
+}
+
+.status-message--error {
+  color: #8a1538;
+  background: #ffe7ef;
+}
+
+code {
+  padding: 0.1rem 0.3rem;
+  border-radius: 0.35rem;
+  background: #eef3ff;
+}
+
+@media (max-width: 720px) {
+  .app-shell {
+    padding: 1rem 0;
+  }
+
+  .hero-panel,
+  .workspace-panel,
+  .status-panel {
+    padding: 1.25rem;
+    border-radius: 18px;
+  }
+
+  .workspace-panel {
+    grid-template-columns: 1fr;
+  }
+}

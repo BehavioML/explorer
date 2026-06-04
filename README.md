@@ -187,6 +187,18 @@ core layers continue to avoid direct Validator coupling. This dependency should
 be switched to a normal npm semver range once `@behavioml/validator` is published
 to the registry.
 
+## GitHub Pages deployment
+
+This repository deploys the Vite production build from `dist/` through GitHub
+Actions using GitHub's official Pages artifact flow. Repository settings must be
+configured as **GitHub Pages -> Source: GitHub Actions**; the deployment workflow
+does not push built assets to a `gh-pages` branch.
+
+The Pages workflow runs on pushes to `main` and manual `workflow_dispatch`
+triggers, then installs dependencies, typechecks, runs tests, builds the app,
+uploads `dist/` with `actions/upload-pages-artifact`, and deploys it with
+`actions/deploy-pages`.
+
 ## Running the scaffold
 
 Install dependencies:

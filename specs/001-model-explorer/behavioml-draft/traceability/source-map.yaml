@@ -71,7 +71,6 @@ mappings:
       - capabilities:search/search_workspace
       - capabilities:search/open_search_result
       - workflows:search/search_workspace
-      - events:search/search_result_selected
   - source: specs/001-model-explorer/spec.md#validation-and-diagnostics
     targets:
       - roles:validator

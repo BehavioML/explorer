@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { gzipSync } from 'node:zlib';
+import { zipSync } from 'fflate';
 import { ApplicationError, detectWorkspaceRoot, normalizeWorkspacePath } from '../src/core';
 import { extractArchiveBytes } from '../src/adapters/browser';
 
@@ -80,10 +81,92 @@ test('extracts a .tgz archive to files relative to the detected model root', asy
   ]);
 });
 
+test('extracts a .zip archive with model files at archive root', async () => {
+  const archiveBytes = createZip({
+    'roles/user.yaml': 'description: User role.\n',
+    'workflows/main.json': '{"id":"main"}\n',
+  });
+
+  const result = await extractArchiveBytes(archiveBytes, 'model.zip');
+
+  assert.equal(result.modelRoot, '');
+  assert.deepEqual(result.files, [
+    { path: 'roles/user.yaml', content: 'description: User role.\n' },
+    { path: 'workflows/main.json', content: '{"id":"main"}\n' },
+  ]);
+});
+
+const conventionalZipArchive = createZip({
+  'behavioml/model/roles/user.yaml': 'description: User role.\n',
+  'behavioml/model/components/service.yml': 'description: Service component.\n',
+});
+
+test('extracts a .zip archive with model files under behavioml/model', async () => {
+  const result = await extractArchiveBytes(conventionalZipArchive, 'model.zip');
+
+  assert.equal(result.modelRoot, 'behavioml/model/');
+  assert.deepEqual(result.files, [
+    { path: 'roles/user.yaml', content: 'description: User role.\n' },
+    { path: 'components/service.yml', content: 'description: Service component.\n' },
+  ]);
+});
+
 test('reports unsupported archive types clearly', async () => {
   await assert.rejects(
-    () => extractArchiveBytes(new ArrayBuffer(0), 'model.zip'),
-    (error) => error instanceof ApplicationError && error.kind === 'unsupported_archive_type',
+    () => extractArchiveBytes(new ArrayBuffer(0), 'model.tar'),
+    (error) =>
+      error instanceof ApplicationError &&
+      error.kind === 'unsupported_archive_type' &&
+      error.message.includes('Upload a `.tgz`, `.tar.gz`, or `.zip` archive.'),
+  );
+});
+
+test('rejects path traversal inside a .zip archive', async () => {
+  const archiveBytes = createZip({
+    '../roles/user.yaml': 'description: User role.\n',
+  });
+
+  await assert.rejects(
+    () => extractArchiveBytes(archiveBytes, 'model.zip'),
+    (error) => error instanceof ApplicationError && error.kind === 'archive_extraction_failed',
+  );
+});
+
+test('ignores non-model files inside a .zip archive', async () => {
+  const archiveBytes = createZip({
+    'roles/user.yaml': 'description: User role.\n',
+    'roles/notes.md': 'ignored',
+    'assets/logo.svg': '<svg />',
+  });
+
+  const result = await extractArchiveBytes(archiveBytes, 'model.zip');
+
+  assert.deepEqual(result.files, [
+    { path: 'roles/user.yaml', content: 'description: User role.\n' },
+  ]);
+});
+
+test('reports invalid UTF-8 ZIP model entries as archive extraction errors', async () => {
+  const archiveBytes = createZipBytes({
+    'roles/user.yaml': new Uint8Array([0xff, 0xfe, 0xfd]),
+  });
+
+  await assert.rejects(
+    () => extractArchiveBytes(archiveBytes, 'model.zip'),
+    (error) =>
+      error instanceof ApplicationError &&
+      error.kind === 'archive_extraction_failed' &&
+      error.message.includes('not valid UTF-8 text'),
+  );
+});
+
+test('reports malformed .zip archives as archive extraction errors', async () => {
+  await assert.rejects(
+    () => extractArchiveBytes(new Uint8Array([1, 2, 3, 4]).buffer, 'model.zip'),
+    (error) =>
+      error instanceof ApplicationError &&
+      error.kind === 'archive_extraction_failed' &&
+      error.message.includes('model.zip'),
   );
 });
 
@@ -120,5 +203,21 @@ function createTarGz(files: Record<string, string>): ArrayBuffer {
   return gzipBuffer.buffer.slice(
     gzipBuffer.byteOffset,
     gzipBuffer.byteOffset + gzipBuffer.byteLength,
+  ) as ArrayBuffer;
+}
+
+function createZip(files: Record<string, string>): ArrayBuffer {
+  return createZipBytes(
+    Object.fromEntries(
+      Object.entries(files).map(([path, content]) => [path, Buffer.from(content, 'utf8')]),
+    ),
+  );
+}
+
+function createZipBytes(files: Record<string, Uint8Array>): ArrayBuffer {
+  const zipBuffer = zipSync(files);
+  return zipBuffer.buffer.slice(
+    zipBuffer.byteOffset,
+    zipBuffer.byteOffset + zipBuffer.byteLength,
   ) as ArrayBuffer;
 }

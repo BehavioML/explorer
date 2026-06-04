@@ -29,7 +29,8 @@ type Status =
 export function App() {
   const [status, setStatus] = useState<Status>({
     kind: 'idle',
-    message: 'No workspace loaded. Choose a .tgz or .tar.gz archive to validate it in memory.',
+    message:
+      'No workspace loaded. Choose a .tgz, .tar.gz, or .zip archive to validate it in memory.',
   });
   const [workspaceOverview, setWorkspaceOverview] = useState<WorkspaceOverviewViewModel>();
   const [workspaceFiles, setWorkspaceFiles] = useState<readonly WorkspaceFileEntry[]>([]);
@@ -123,17 +124,17 @@ export function App() {
           <p className="eyebrow">Workspace</p>
           <h2 id="workspace-loading-title">Load a model archive</h2>
           <p>
-            Upload a <code>.tgz</code> or <code>.tar.gz</code> archive whose model root is either at
-            the archive root, under <code>behavioml/</code>, or under <code>behavioml/model/</code>.
-            Remote URL loading remains deferred.
+            Upload a <code>.tgz</code>, <code>.tar.gz</code>, or <code>.zip</code> archive whose
+            model root is either at the archive root, under <code>behavioml/</code>, or under{' '}
+            <code>behavioml/model/</code>. Remote URL loading remains deferred.
           </p>
         </div>
 
         <label className="upload-placeholder">
-          <span>Choose .tgz or .tar.gz archive</span>
+          <span>Choose .tgz, .tar.gz, or .zip archive</span>
           <input
             type="file"
-            accept=".tgz,.tar.gz,application/gzip"
+            accept=".tgz,.tar.gz,.zip,application/gzip,application/zip"
             disabled={status.kind === 'loading'}
             onChange={(event) => void handleArchiveSelected(event.currentTarget.files?.[0])}
           />

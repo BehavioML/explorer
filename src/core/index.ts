@@ -14,7 +14,18 @@ export type {
   PathDerivedEntitySelection,
   PathDerivedModelEntity,
 } from './entityIndex';
-export type { DiagnosticSeverity, DiagnosticViewModel, ValidationResultViewModel } from './diagnostics';
+export {
+  createDiagnosticNavigationTarget,
+  findDiagnosticsForEntity,
+  findEntityForDiagnostic,
+} from './diagnostics';
+export type {
+  DiagnosticNavigationStatus,
+  DiagnosticSelection,
+  DiagnosticSeverity,
+  DiagnosticViewModel,
+  ValidationResultViewModel,
+} from './diagnostics';
 export { createSourceFileView, findSourceFileForEntity } from './sourceFileView';
 export type { SourceFileViewModel } from './sourceFileView';
 export {

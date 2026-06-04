@@ -531,3 +531,63 @@ code {
   color: #7a4a00;
   background: #fff4d8;
 }
+
+.diagnostic-item--button {
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.diagnostic-item--button:hover,
+.diagnostic-item--button:focus-visible {
+  border-color: #91a3c4;
+  outline: none;
+}
+
+.diagnostic-item--selected {
+  border-color: #4f7dd3;
+  background: #eef3ff;
+}
+
+.selected-diagnostic-context {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid #c7d5ee;
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.diagnostic-navigation-note {
+  padding: 0.75rem;
+  border-radius: 12px;
+  color: #7a4a00;
+  background: #fff4d8;
+}
+
+.selected-diagnostic-list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.selected-diagnostic-list div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.selected-diagnostic-list dt {
+  color: #52617a;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.selected-diagnostic-list dd {
+  margin: 0;
+  color: #202c43;
+  overflow-wrap: anywhere;
+}

@@ -11,16 +11,9 @@
     "test": "node --test"
   },
   "dependencies": {
+    "@behavioml/validator": "git+https://github.com/BehavioML/validator.git#be6814f169c0e46245394956fbe21548233b2797",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
-  },
-  "peerDependencies": {
-    "@behavioml/validator": "^0.1.0"
-  },
-  "peerDependenciesMeta": {
-    "@behavioml/validator": {
-      "optional": true
-    }
   },
   "devDependencies": {
     "@types/react": "^19.1.0",

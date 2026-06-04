@@ -72,9 +72,9 @@ function toAdapterError(cause: unknown): ValidatorAdapterResult {
 }
 
 async function loadValidatorModule(): Promise<ValidatorModule> {
-  // @behavioml/validator is currently not published to npm. Keep the semantic
-  // engine behind this deferred adapter import so the Explorer scaffold can
-  // build while dependency wiring is resolved by a future integration PR.
+  // Keep the semantic engine behind this deferred adapter import so Validator
+  // remains isolated from core and UI layers while the package is consumed from
+  // the pinned Git dependency declared by Explorer.
   return import('@behavioml/validator');
 }
 

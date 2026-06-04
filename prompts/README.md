@@ -22,7 +22,10 @@ Command prompts define process.
 Examples:
 
 - `behavioml.derive`
+- `behavioml.validate`
 - `behavioml.review`
+- `behavioml.refine`
+- `behavioml.promote`
 
 They own:
 
@@ -73,6 +76,37 @@ They own:
 - product decisions.
 
 Avoid creating large feature-specific derivation prompts when reusable profiles are sufficient.
+
+## Suggested BehavioML workflow
+
+Use command prompts as a lightweight pipeline:
+
+```text
+derive
+    -> validate
+    -> review
+    -> refine
+    -> validate again
+    -> promote
+```
+
+Recommended meaning:
+
+- `derive`: create or update a feature-local draft from source artifacts.
+- `validate`: run official validation or clearly labeled fallback checks.
+- `review`: assess behavior-first modeling quality and readiness.
+- `refine`: apply focused modeling-quality fixes to an existing draft.
+- `promote`: move reviewed draft content into the accepted model only when explicitly requested.
+
+Profiles can be composed with commands when the source system belongs to a reusable class.
+
+Example:
+
+```text
+behavioml.review
+    + interactive-tool profile
+    + specs/001-model-explorer source artifacts
+```
 
 ## Prompt quality rules
 

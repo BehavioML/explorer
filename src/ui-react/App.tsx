@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { extractUploadedArchive } from '../adapters/browser';
 import { validateInMemoryModelWorkspace } from '../adapters/validator';
-import type { DiagnosticViewModel, ValidationResultViewModel } from '../core';
-
-interface LoadedWorkspaceSummary {
-  readonly sourceLabel: string;
-  readonly modelRoot: string;
-  readonly fileCount: number;
-}
+import {
+  BEHAVIOML_MODEL_SCOPE_DIRECTORIES,
+  createValidatedWorkspaceOverview,
+  createWorkspaceOverview,
+  type DiagnosticViewModel,
+  type ValidationResultViewModel,
+  type WorkspaceOverviewValidationStatus,
+  type WorkspaceOverviewViewModel,
+} from '../core';
 
 type Status =
   | { readonly kind: 'idle'; readonly message: string }
@@ -20,23 +22,26 @@ export function App() {
     kind: 'idle',
     message: 'No workspace loaded. Choose a .tgz or .tar.gz archive to validate it in memory.',
   });
-  const [workspaceSummary, setWorkspaceSummary] = useState<LoadedWorkspaceSummary | undefined>();
+  const [workspaceOverview, setWorkspaceOverview] = useState<WorkspaceOverviewViewModel>();
 
   async function handleArchiveSelected(file: File | undefined) {
     if (!file) {
       return;
     }
 
-    setWorkspaceSummary(undefined);
+    setWorkspaceOverview(undefined);
     setStatus({ kind: 'loading', message: `Extracting ${file.name} in the browser...` });
 
     try {
       const workspace = await extractUploadedArchive({ kind: 'uploaded_archive', file });
-      setWorkspaceSummary({
-        sourceLabel: workspace.sourceLabel,
-        modelRoot: workspace.modelRoot || '<archive root>',
-        fileCount: workspace.files.length,
-      });
+      setWorkspaceOverview(
+        createWorkspaceOverview({
+          sourceLabel: workspace.sourceLabel,
+          modelRoot: workspace.modelRoot,
+          files: workspace.files,
+          validationStatus: 'running',
+        }),
+      );
       setStatus({
         kind: 'loading',
         message: `Validating ${workspace.files.length} extracted model file${workspace.files.length === 1 ? '' : 's'}...`,
@@ -45,10 +50,26 @@ export function App() {
       const validationResult = await validateInMemoryModelWorkspace(workspace.files);
 
       if (validationResult.status === 'adapter_error') {
+        setWorkspaceOverview(
+          createWorkspaceOverview({
+            sourceLabel: workspace.sourceLabel,
+            modelRoot: workspace.modelRoot,
+            files: workspace.files,
+            validationStatus: 'validation_unavailable',
+          }),
+        );
         setStatus({ kind: 'error', message: validationResult.error.message });
         return;
       }
 
+      setWorkspaceOverview(
+        createValidatedWorkspaceOverview({
+          sourceLabel: workspace.sourceLabel,
+          modelRoot: workspace.modelRoot,
+          files: workspace.files,
+          validation: validationResult.validation,
+        }),
+      );
       setStatus({
         kind: 'validated',
         message: validationResult.validation.ok
@@ -73,7 +94,8 @@ export function App() {
         <h1 id="explorer-title">Model Explorer</h1>
         <p className="hero-copy">
           First read-only vertical slice for loading an uploaded BehavioML model archive, extracting
-          it in the browser, validating the in-memory workspace, and showing Validator diagnostics.
+          it in the browser, validating the in-memory workspace, and showing a path-based workspace
+          overview with Validator diagnostics.
         </p>
       </section>
 
@@ -83,9 +105,9 @@ export function App() {
           <h2 id="workspace-loading-title">Load a model archive</h2>
           <p>
             Upload a <code>.tgz</code> or <code>.tar.gz</code> archive whose model root is either at
-            the archive root or under <code>behavioml/</code>. Remote URL loading remains deferred.
+            the archive root, under <code>behavioml/</code>, or under <code>behavioml/model/</code>.
+            Remote URL loading remains deferred.
           </p>
-          {workspaceSummary ? <WorkspaceSummary summary={workspaceSummary} /> : null}
         </div>
 
         <label className="upload-placeholder">
@@ -98,6 +120,8 @@ export function App() {
           />
         </label>
       </section>
+
+      {workspaceOverview ? <WorkspaceOverview overview={workspaceOverview} /> : null}
 
       <section className="status-panel" aria-labelledby="validation-status-title">
         <p className="eyebrow">Validation</p>
@@ -116,22 +140,61 @@ export function App() {
   );
 }
 
-function WorkspaceSummary({ summary }: { readonly summary: LoadedWorkspaceSummary }) {
+function WorkspaceOverview({ overview }: { readonly overview: WorkspaceOverviewViewModel }) {
   return (
-    <dl className="workspace-summary" aria-label="Loaded workspace summary">
-      <div>
-        <dt>Archive</dt>
-        <dd>{summary.sourceLabel}</dd>
-      </div>
-      <div>
-        <dt>Model root</dt>
-        <dd>{summary.modelRoot}</dd>
-      </div>
-      <div>
-        <dt>Validation files</dt>
-        <dd>{summary.fileCount}</dd>
-      </div>
-    </dl>
+    <section className="overview-panel" aria-labelledby="workspace-overview-title">
+      <p className="eyebrow">Overview</p>
+      <h2 id="workspace-overview-title">Workspace overview</h2>
+      <p>
+        Scope counts are derived from workspace-relative file paths only. The Validator remains the
+        authority for BehavioML model semantics.
+      </p>
+
+      <dl className="workspace-summary" aria-label="Loaded workspace overview">
+        <div>
+          <dt>Source</dt>
+          <dd>{overview.sourceLabel}</dd>
+        </div>
+        <div>
+          <dt>Model root</dt>
+          <dd>{overview.modelRoot}</dd>
+        </div>
+        <div>
+          <dt>Validation files</dt>
+          <dd>{overview.validationFileCount}</dd>
+        </div>
+        <div>
+          <dt>Validation</dt>
+          <dd>{formatValidationStatus(overview.validationStatus)}</dd>
+        </div>
+        <div>
+          <dt>Diagnostics</dt>
+          <dd>
+            {overview.diagnosticSummary.errors} error
+            {overview.diagnosticSummary.errors === 1 ? '' : 's'},{' '}
+            {overview.diagnosticSummary.warnings} warning
+            {overview.diagnosticSummary.warnings === 1 ? '' : 's'},{' '}
+            {overview.diagnosticSummary.other} info/other
+          </dd>
+        </div>
+      </dl>
+
+      <h3>Scope counts</h3>
+      <ScopeCountList overview={overview} />
+    </section>
+  );
+}
+
+function ScopeCountList({ overview }: { readonly overview: WorkspaceOverviewViewModel }) {
+  return (
+    <ul className="scope-count-list" aria-label="Path-based BehavioML scope counts">
+      {BEHAVIOML_MODEL_SCOPE_DIRECTORIES.map((scope) => (
+        <li key={scope}>
+          <span>{scope}</span>
+          <strong>{overview.scopeCounts[scope]}</strong>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -171,4 +234,19 @@ function DiagnosticItem({ diagnostic }: { readonly diagnostic: DiagnosticViewMod
       {diagnostic.fieldPath ? <code>{diagnostic.fieldPath}</code> : null}
     </li>
   );
+}
+
+function formatValidationStatus(status: WorkspaceOverviewValidationStatus): string {
+  switch (status) {
+    case 'not_run':
+      return 'Not run';
+    case 'running':
+      return 'Running';
+    case 'valid':
+      return 'Valid';
+    case 'has_diagnostics':
+      return 'Has diagnostics';
+    case 'validation_unavailable':
+      return 'Validation unavailable';
+  }
 }

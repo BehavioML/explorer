@@ -31,6 +31,21 @@ type Status =
   | { readonly kind: 'validated'; readonly message: string; readonly validation: ValidationResultViewModel }
   | { readonly kind: 'error'; readonly message: string };
 
+type ActivityMode = 'explorer' | 'search' | 'validation' | 'diagrams' | 'relationships';
+type WorkspaceTab = 'overview' | 'source' | 'diagram';
+
+const activityItems: readonly {
+  readonly id: ActivityMode;
+  readonly label: string;
+  readonly shortLabel: string;
+}[] = [
+  { id: 'explorer', label: 'Explorer', shortLabel: 'Exp' },
+  { id: 'search', label: 'Search', shortLabel: 'Find' },
+  { id: 'validation', label: 'Validation', shortLabel: 'Val' },
+  { id: 'diagrams', label: 'Diagrams', shortLabel: 'Dia' },
+  { id: 'relationships', label: 'Relationships', shortLabel: 'Rel' },
+];
+
 export function App() {
   const [status, setStatus] = useState<Status>({
     kind: 'idle',
@@ -42,6 +57,10 @@ export function App() {
   const [entityIndex, setEntityIndex] = useState<PathDerivedEntityIndex>();
   const [selectedEntity, setSelectedEntity] = useState<PathDerivedEntitySelection>();
   const [selectedDiagnostic, setSelectedDiagnostic] = useState<DiagnosticSelection>();
+  const [selectedSearchResult, setSelectedSearchResult] = useState<SearchResult>();
+  const [searchText, setSearchText] = useState('');
+  const [activeActivity, setActiveActivity] = useState<ActivityMode>('explorer');
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>('overview');
 
   async function handleArchiveSelected(file: File | undefined) {
     if (!file) {
@@ -53,6 +72,10 @@ export function App() {
     setEntityIndex(undefined);
     setSelectedEntity(undefined);
     setSelectedDiagnostic(undefined);
+    setSelectedSearchResult(undefined);
+    setSearchText('');
+    setActiveActivity('explorer');
+    setActiveTab('overview');
     setStatus({ kind: 'loading', message: `Extracting ${file.name} in the browser...` });
 
     try {
@@ -69,6 +92,7 @@ export function App() {
           validationStatus: 'running',
         }),
       );
+      setActiveTab('overview');
       setStatus({
         kind: 'loading',
         message: `Validating ${workspace.files.length} extracted model file${workspace.files.length === 1 ? '' : 's'}...`,
@@ -113,10 +137,25 @@ export function App() {
   }
 
   const validation = status.kind === 'validated' ? status.validation : undefined;
+  const selected = entityIndex ? findSelectedEntity(entityIndex, selectedEntity) : undefined;
+  const sourceView = selected ? createSourceFileView(workspaceFiles, selected) : undefined;
+  const selectedDiagnostics = selected
+    ? findDiagnosticsForEntity(validation?.diagnostics ?? [], selected)
+    : [];
+  const searchResults = useMemo(
+    () =>
+      entityIndex
+        ? searchWorkspace({ query: searchText, files: workspaceFiles, entityIndex })
+        : ([] as readonly SearchResult[]),
+    [entityIndex, searchText, workspaceFiles],
+  );
 
   function handleEntitySelected(selection: PathDerivedEntitySelection) {
     setSelectedEntity(selection);
     setSelectedDiagnostic(undefined);
+    setSelectedSearchResult(undefined);
+    setActiveActivity('explorer');
+    setActiveTab('source');
   }
 
   function handleDiagnosticSelected(diagnostic: DiagnosticViewModel) {
@@ -126,21 +165,572 @@ export function App() {
 
     const navigationTarget = createDiagnosticNavigationTarget(entityIndex, diagnostic);
     setSelectedDiagnostic(navigationTarget);
+    setSelectedSearchResult(undefined);
 
     if (navigationTarget.entityKey) {
       setSelectedEntity(navigationTarget.entityKey);
+      setActiveTab('source');
     }
   }
 
+  function handleSearchQueryChanged(query: string) {
+    setSearchText(query);
+    setSelectedSearchResult(undefined);
+    if (query.trim().length > 0) {
+      setActiveActivity('search');
+    }
+  }
+
+  function handleSearchResultSelected(result: SearchResult) {
+    setSelectedSearchResult(result.kind === 'source_match' ? result : undefined);
+    setSelectedDiagnostic(undefined);
+
+    if (result.entityKey) {
+      setSelectedEntity(result.entityKey);
+      setActiveTab('source');
+    }
+  }
+
+  const layout = new URLSearchParams(window.location.search).get('layout');
+
+  if (layout === 'classic') {
+    return (
+      <ClassicLayout
+        entityIndex={entityIndex}
+        searchResults={searchResults}
+        searchText={searchText}
+        selected={selected}
+        selectedDiagnostic={selectedDiagnostic}
+        selectedDiagnostics={selectedDiagnostics}
+        selectedEntity={selectedEntity}
+        selectedSearchResult={selectedSearchResult}
+        sourceView={sourceView}
+        status={status}
+        validation={validation}
+        workspaceFiles={workspaceFiles}
+        workspaceOverview={workspaceOverview}
+        onArchiveSelected={handleArchiveSelected}
+        onDiagnosticSelected={handleDiagnosticSelected}
+        onEntitySelected={handleEntitySelected}
+        onSearchQueryChanged={handleSearchQueryChanged}
+        onSearchResultSelected={handleSearchResultSelected}
+      />
+    );
+  }
+
   return (
-    <main className="app-shell">
+    <main className="workbench-shell" aria-label="BehavioML Explorer workbench">
+      <TopBar
+        searchText={searchText}
+        status={status}
+        validation={validation}
+        workspaceOverview={workspaceOverview}
+        onArchiveSelected={handleArchiveSelected}
+        onSearchChange={handleSearchQueryChanged}
+      />
+
+      <div className="workbench-body">
+        <ActivityBar activeActivity={activeActivity} onSelectActivity={setActiveActivity} />
+        <ExplorerPanel
+          activeActivity={activeActivity}
+          index={entityIndex}
+          searchResults={searchResults}
+          searchText={searchText}
+          selectedEntity={selectedEntity}
+          selectedSearchResult={selectedSearchResult}
+          validation={validation}
+          workspaceOverview={workspaceOverview}
+          onSearchQueryChanged={handleSearchQueryChanged}
+          onSearchResultSelected={handleSearchResultSelected}
+          onSelectActivity={setActiveActivity}
+          onSelectEntity={handleEntitySelected}
+        />
+        <WorkspaceTabs
+          activeTab={activeTab}
+          diagnostics={selectedDiagnostics}
+          entity={selected}
+          selectedDiagnostic={selectedDiagnostic}
+          selectedSearchResult={selectedSearchResult}
+          sourceView={sourceView}
+          validation={validation}
+          workspaceOverview={workspaceOverview}
+          onSelectActivity={setActiveActivity}
+          onSelectTab={setActiveTab}
+        />
+        <InspectorPanel
+          entity={selected}
+          selectedDiagnostic={selectedDiagnostic}
+          selectedDiagnostics={selectedDiagnostics}
+          selectedSearchResult={selectedSearchResult}
+          sourceView={sourceView}
+          validation={validation}
+        />
+      </div>
+
+      <DiagnosticsPanel
+        selectedDiagnostic={selectedDiagnostic}
+        status={status}
+        validation={validation}
+        onSelectDiagnostic={handleDiagnosticSelected}
+      />
+    </main>
+  );
+}
+
+function TopBar({
+  searchText,
+  status,
+  validation,
+  workspaceOverview,
+  onArchiveSelected,
+  onSearchChange,
+}: {
+  readonly searchText: string;
+  readonly status: Status;
+  readonly validation: ValidationResultViewModel | undefined;
+  readonly workspaceOverview: WorkspaceOverviewViewModel | undefined;
+  readonly onArchiveSelected: (file: File | undefined) => void;
+  readonly onSearchChange: (query: string) => void;
+}) {
+  return (
+    <header className="top-bar">
+      <div className="brand-lockup" aria-label="Application identity">
+        <span className="app-icon" aria-hidden="true">
+          B
+        </span>
+        <div>
+          <strong>BehavioML Explorer</strong>
+          <span>{workspaceOverview?.modelRoot ?? 'No workspace loaded'}</span>
+        </div>
+      </div>
+
+      <div className="top-bar-status" aria-live="polite">
+        <span className={`status-dot status-dot--${status.kind}`} aria-hidden="true" />
+        <span>{formatTopBarStatus(status, validation)}</span>
+      </div>
+
+      <label className="top-search">
+        <span className="visually-hidden">Search loaded workspace</span>
+        <input
+          type="search"
+          value={searchText}
+          placeholder="Search workspace..."
+          disabled={!workspaceOverview}
+          onChange={(event) => onSearchChange(event.currentTarget.value)}
+        />
+      </label>
+
+      <label className="top-load-button">
+        <span>{status.kind === 'loading' ? 'Loading...' : 'Load archive'}</span>
+        <input
+          type="file"
+          accept=".tgz,.tar.gz,.zip,application/gzip,application/zip"
+          disabled={status.kind === 'loading'}
+          onChange={(event) => void onArchiveSelected(event.currentTarget.files?.[0])}
+        />
+      </label>
+    </header>
+  );
+}
+
+function ActivityBar({
+  activeActivity,
+  onSelectActivity,
+}: {
+  readonly activeActivity: ActivityMode;
+  readonly onSelectActivity: (activity: ActivityMode) => void;
+}) {
+  return (
+    <nav className="activity-bar" aria-label="Workbench activity bar">
+      {activityItems.map((item) => (
+        <button
+          className={
+            activeActivity === item.id ? 'activity-button activity-button--active' : 'activity-button'
+          }
+          type="button"
+          aria-pressed={activeActivity === item.id}
+          title={item.label}
+          key={item.id}
+          onClick={() => onSelectActivity(item.id)}
+        >
+          <span>{item.shortLabel}</span>
+          <small>{item.label}</small>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function ExplorerPanel({
+  activeActivity,
+  index,
+  searchResults,
+  searchText,
+  selectedEntity,
+  selectedSearchResult,
+  validation,
+  workspaceOverview,
+  onSearchQueryChanged,
+  onSearchResultSelected,
+  onSelectActivity,
+  onSelectEntity,
+}: {
+  readonly activeActivity: ActivityMode;
+  readonly index: PathDerivedEntityIndex | undefined;
+  readonly searchResults: readonly SearchResult[];
+  readonly searchText: string;
+  readonly selectedEntity: PathDerivedEntitySelection;
+  readonly selectedSearchResult: SearchResult | undefined;
+  readonly validation: ValidationResultViewModel | undefined;
+  readonly workspaceOverview: WorkspaceOverviewViewModel | undefined;
+  readonly onSearchQueryChanged: (query: string) => void;
+  readonly onSearchResultSelected: (result: SearchResult) => void;
+  readonly onSelectActivity: (activity: ActivityMode) => void;
+  readonly onSelectEntity: (selection: PathDerivedEntitySelection) => void;
+}) {
+  return (
+    <aside className="explorer-panel" aria-label="Explorer panel">
+      <div className="panel-heading">
+        <p className="eyebrow">{formatActivityTitle(activeActivity)}</p>
+        <h2>{formatActivityTitle(activeActivity)}</h2>
+      </div>
+
+      {activeActivity === 'explorer' ? (
+        <>
+          <button className="overview-tree-button" type="button" onClick={() => onSelectActivity('explorer')}>
+            <span>Overview</span>
+            <small>Loaded workspace orientation</small>
+          </button>
+          {index ? (
+            <EntityScopeList
+              index={index}
+              selectedEntity={selectedEntity}
+              onSelectEntity={onSelectEntity}
+            />
+          ) : (
+            <EmptyWorkbenchState workspaceOverview={workspaceOverview} />
+          )}
+        </>
+      ) : null}
+
+      {activeActivity === 'search' ? (
+        index ? (
+          <SearchPanel
+            query={searchText}
+            results={searchResults}
+            selectedSearchResult={selectedSearchResult}
+            onQueryChange={onSearchQueryChanged}
+            onSelectResult={onSearchResultSelected}
+          />
+        ) : (
+          <PlaceholderPanel title="Search" message="Load a workspace to search source text and path-derived model entities." />
+        )
+      ) : null}
+
+      {activeActivity === 'validation' ? (
+        <ValidationActivitySummary validation={validation} workspaceOverview={workspaceOverview} />
+      ) : null}
+
+      {activeActivity === 'diagrams' ? (
+        <PlaceholderPanel
+          title="Diagrams"
+          message="Diagram navigation is reserved for future generated diagram surfaces. No diagram rendering is implemented in this workbench slice."
+        />
+      ) : null}
+
+      {activeActivity === 'relationships' ? (
+        <PlaceholderPanel
+          title="Relationships"
+          message="Relationship navigation, reference resolution, and backlinks are future work and are not inferred by this UI."
+        />
+      ) : null}
+    </aside>
+  );
+}
+
+function WorkspaceTabs({
+  activeTab,
+  diagnostics,
+  entity,
+  selectedDiagnostic,
+  selectedSearchResult,
+  sourceView,
+  validation,
+  workspaceOverview,
+  onSelectActivity,
+  onSelectTab,
+}: {
+  readonly activeTab: WorkspaceTab;
+  readonly diagnostics: readonly DiagnosticViewModel[];
+  readonly entity: PathDerivedModelEntity | undefined;
+  readonly selectedDiagnostic: DiagnosticSelection | undefined;
+  readonly selectedSearchResult: SearchResult | undefined;
+  readonly sourceView: SourceFileViewModel | undefined;
+  readonly validation: ValidationResultViewModel | undefined;
+  readonly workspaceOverview: WorkspaceOverviewViewModel | undefined;
+  readonly onSelectActivity: (activity: ActivityMode) => void;
+  readonly onSelectTab: (tab: WorkspaceTab) => void;
+}) {
+  const tabs: readonly { readonly id: WorkspaceTab; readonly label: string }[] = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'source', label: entity ? `Source: ${entity.displayName}` : 'Source' },
+    { id: 'diagram', label: 'Diagram' },
+  ];
+
+  return (
+    <section className="workspace-area" aria-label="Workspace tabs and content">
+      <div className="workspace-tab-strip" role="tablist" aria-label="Workspace tabs">
+        {tabs.map((tab) => (
+          <button
+            className={activeTab === tab.id ? 'workspace-tab workspace-tab--active' : 'workspace-tab'}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            key={tab.id}
+            onClick={() => onSelectTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="workspace-content">
+        {activeTab === 'overview' ? (
+          <WorkspaceOverviewPanel
+            overview={workspaceOverview}
+            validation={validation}
+            onOpenDiagnostics={() => onSelectActivity('validation')}
+            onOpenExplorer={() => onSelectActivity('explorer')}
+            onOpenDiagrams={() => onSelectTab('diagram')}
+          />
+        ) : null}
+        {activeTab === 'source' ? (
+          <SourcePanel
+            diagnostics={diagnostics}
+            entity={entity}
+            selectedDiagnostic={selectedDiagnostic}
+            selectedSearchResult={selectedSearchResult}
+            sourceView={sourceView}
+          />
+        ) : null}
+        {activeTab === 'diagram' ? <DiagramPlaceholder entity={entity} /> : null}
+      </div>
+    </section>
+  );
+}
+
+function WorkspaceOverviewPanel({
+  overview,
+  validation,
+  onOpenDiagnostics,
+  onOpenExplorer,
+  onOpenDiagrams,
+}: {
+  readonly overview: WorkspaceOverviewViewModel | undefined;
+  readonly validation: ValidationResultViewModel | undefined;
+  readonly onOpenDiagnostics: () => void;
+  readonly onOpenExplorer: () => void;
+  readonly onOpenDiagrams: () => void;
+}) {
+  if (!overview) {
+    return (
+      <section className="overview-workspace-empty" aria-labelledby="empty-overview-title">
+        <p className="eyebrow">Overview</p>
+        <h2 id="empty-overview-title">Load a BehavioML workspace</h2>
+        <p>
+          Choose an uploaded archive from the top bar to establish the workspace context. The
+          workbench will then open this overview with root, scope, and validation health.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="overview-workspace" aria-labelledby="workspace-overview-title">
+      <div className="workspace-title-row">
+        <div>
+          <p className="eyebrow">Overview</p>
+          <h2 id="workspace-overview-title">Workspace overview</h2>
+        </div>
+        <span className="health-pill">{formatValidationStatus(overview.validationStatus)}</span>
+      </div>
+
+      <dl className="workspace-summary compact-summary" aria-label="Loaded workspace overview">
+        <div>
+          <dt>Source</dt>
+          <dd>{overview.sourceLabel}</dd>
+        </div>
+        <div>
+          <dt>Model root</dt>
+          <dd>{overview.modelRoot}</dd>
+        </div>
+        <div>
+          <dt>Validation files</dt>
+          <dd>{overview.validationFileCount}</dd>
+        </div>
+        <div>
+          <dt>Diagnostics</dt>
+          <dd>{formatDiagnosticSummary(overview)}</dd>
+        </div>
+      </dl>
+
+      <div className="overview-actions" aria-label="Overview entry points">
+        <button type="button" onClick={onOpenExplorer}>
+          Browse entities
+        </button>
+        <button type="button" onClick={onOpenDiagnostics}>
+          Review diagnostics
+        </button>
+        <button type="button" onClick={onOpenDiagrams}>
+          Diagram placeholder
+        </button>
+      </div>
+
+      <h3>Scope counts</h3>
+      <ScopeCountList overview={overview} />
+
+      <p className="overview-note">
+        Scope counts and entities are path-derived from extracted workspace files. Source remains the
+        authority in this UI; Validator output remains the authority for BehavioML semantics.
+      </p>
+      {!validation ? <p className="overview-note">Validation is not available until the adapter completes successfully.</p> : null}
+    </section>
+  );
+}
+
+function DiagramPlaceholder({ entity }: { readonly entity: PathDerivedModelEntity | undefined }) {
+  return (
+    <section className="diagram-placeholder" aria-labelledby="diagram-placeholder-title">
+      <p className="eyebrow">Diagram</p>
+      <h2 id="diagram-placeholder-title">
+        {entity ? `Diagram: ${entity.displayName}` : 'Diagram workspace'}
+      </h2>
+      <div className="diagram-placeholder-box">
+        <p>Diagram rendering is future work.</p>
+        <p>
+          Future diagrams will live in the main workspace as navigation aids and connect back to
+          source and model relationships. This implementation does not generate diagrams, infer
+          relationships, or render fake diagram content.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function InspectorPanel({
+  entity,
+  selectedDiagnostic,
+  selectedDiagnostics,
+  selectedSearchResult,
+  sourceView,
+  validation,
+}: {
+  readonly entity: PathDerivedModelEntity | undefined;
+  readonly selectedDiagnostic: DiagnosticSelection | undefined;
+  readonly selectedDiagnostics: readonly DiagnosticViewModel[];
+  readonly selectedSearchResult: SearchResult | undefined;
+  readonly sourceView: SourceFileViewModel | undefined;
+  readonly validation: ValidationResultViewModel | undefined;
+}) {
+  return (
+    <aside className="inspector-panel" aria-label="Inspector panel">
+      <div className="panel-heading">
+        <p className="eyebrow">Inspector</p>
+        <h2>Selection</h2>
+      </div>
+      <SelectedEntitySummary entity={entity} diagnosticCount={selectedDiagnostics.length} />
+      <SourceMetadata sourceView={sourceView} />
+      <SelectedDiagnosticContext selection={selectedDiagnostic} />
+      <SelectedSearchMatchContext result={selectedSearchResult} />
+      <InspectorDiagnostics diagnostics={selectedDiagnostics} validation={validation} />
+    </aside>
+  );
+}
+
+function DiagnosticsPanel({
+  selectedDiagnostic,
+  status,
+  validation,
+  onSelectDiagnostic,
+}: {
+  readonly selectedDiagnostic: DiagnosticSelection | undefined;
+  readonly status: Status;
+  readonly validation: ValidationResultViewModel | undefined;
+  readonly onSelectDiagnostic: (diagnostic: DiagnosticViewModel) => void;
+}) {
+  const summary = validation ? summarizeDiagnosticSeverities(validation.diagnostics) : undefined;
+
+  return (
+    <section className="bottom-diagnostics" aria-label="Diagnostics panel">
+      <div className="diagnostics-heading">
+        <strong>Diagnostics</strong>
+        {summary ? (
+          <span>
+            Errors {summary.errors} | Warnings {summary.warnings} | Info {summary.other}
+          </span>
+        ) : (
+          <span>{status.message}</span>
+        )}
+      </div>
+      {validation ? (
+        <ValidationDiagnostics
+          selectedDiagnostic={selectedDiagnostic}
+          validation={validation}
+          onSelectDiagnostic={onSelectDiagnostic}
+        />
+      ) : (
+        <p className="empty-diagnostics">Diagnostics will appear here after validation completes.</p>
+      )}
+    </section>
+  );
+}
+
+function ClassicLayout({
+  entityIndex,
+  searchResults,
+  searchText,
+  selected,
+  selectedDiagnostic,
+  selectedDiagnostics,
+  selectedEntity,
+  selectedSearchResult,
+  sourceView,
+  status,
+  validation,
+  workspaceOverview,
+  onArchiveSelected,
+  onDiagnosticSelected,
+  onEntitySelected,
+  onSearchQueryChanged,
+  onSearchResultSelected,
+}: {
+  readonly entityIndex: PathDerivedEntityIndex | undefined;
+  readonly searchResults: readonly SearchResult[];
+  readonly searchText: string;
+  readonly selected: PathDerivedModelEntity | undefined;
+  readonly selectedDiagnostic: DiagnosticSelection | undefined;
+  readonly selectedDiagnostics: readonly DiagnosticViewModel[];
+  readonly selectedEntity: PathDerivedEntitySelection;
+  readonly selectedSearchResult: SearchResult | undefined;
+  readonly sourceView: SourceFileViewModel | undefined;
+  readonly status: Status;
+  readonly validation: ValidationResultViewModel | undefined;
+  readonly workspaceFiles: readonly WorkspaceFileEntry[];
+  readonly workspaceOverview: WorkspaceOverviewViewModel | undefined;
+  readonly onArchiveSelected: (file: File | undefined) => void;
+  readonly onDiagnosticSelected: (diagnostic: DiagnosticViewModel) => void;
+  readonly onEntitySelected: (selection: PathDerivedEntitySelection) => void;
+  readonly onSearchQueryChanged: (query: string) => void;
+  readonly onSearchResultSelected: (result: SearchResult) => void;
+}) {
+  return (
+    <main className="app-shell app-shell--classic">
       <section className="hero-panel" aria-labelledby="explorer-title">
         <p className="eyebrow">BehavioML</p>
         <h1 id="explorer-title">Model Explorer</h1>
         <p className="hero-copy">
-          First read-only vertical slice for loading an uploaded BehavioML model archive, extracting
-          it in the browser, validating the in-memory workspace, and showing a path-based workspace
-          overview with Validator diagnostics.
+          Classic stacked layout for archive loading, validation, path-derived entity browsing, and
+          raw read-only source viewing.
         </p>
       </section>
 
@@ -161,22 +751,72 @@ export function App() {
             type="file"
             accept=".tgz,.tar.gz,.zip,application/gzip,application/zip"
             disabled={status.kind === 'loading'}
-            onChange={(event) => void handleArchiveSelected(event.currentTarget.files?.[0])}
+            onChange={(event) => void onArchiveSelected(event.currentTarget.files?.[0])}
           />
         </label>
       </section>
 
-      {workspaceOverview ? <WorkspaceOverview overview={workspaceOverview} /> : null}
+      {workspaceOverview ? <WorkspaceOverviewLegacy overview={workspaceOverview} /> : null}
 
       {entityIndex ? (
-        <EntityBrowser
-          diagnostics={validation?.diagnostics ?? []}
-          files={workspaceFiles}
-          index={entityIndex}
-          selectedDiagnostic={selectedDiagnostic}
-          selectedEntity={selectedEntity}
-          onSelectEntity={handleEntitySelected}
-        />
+        <section className="entity-browser-panel" aria-labelledby="entity-browser-title">
+          <div className="entity-browser-heading">
+            <div>
+              <p className="eyebrow">Entities</p>
+              <h2 id="entity-browser-title">Path-derived entity browser</h2>
+              <p>
+                Entities below are inferred from workspace-relative paths under known BehavioML
+                scope directories. Explorer does not parse YAML or JSON content for semantic fields.
+              </p>
+            </div>
+            <strong className="entity-total">{entityIndex.totalEntities} total</strong>
+          </div>
+
+          {entityIndex.totalEntities > 0 ? (
+            <div className="entity-browser-layout">
+              <div className="entity-browser-sidebar">
+                <SearchPanel
+                  query={searchText}
+                  results={searchResults}
+                  selectedSearchResult={selectedSearchResult}
+                  onQueryChange={onSearchQueryChanged}
+                  onSelectResult={onSearchResultSelected}
+                />
+                <EntityScopeList
+                  index={entityIndex}
+                  selectedEntity={selectedEntity}
+                  onSelectEntity={onEntitySelected}
+                />
+              </div>
+              <div className="entity-detail-stack">
+                <SelectedEntitySummary entity={selected} diagnosticCount={selectedDiagnostics.length} />
+                <SelectedDiagnosticContext selection={selectedDiagnostic} />
+                <SourcePanel
+                  diagnostics={selectedDiagnostics}
+                  entity={selected}
+                  selectedDiagnostic={selectedDiagnostic}
+                  selectedSearchResult={selectedSearchResult}
+                  sourceView={sourceView}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="entity-detail-stack">
+              <SearchPanel
+                query={searchText}
+                results={searchResults}
+                selectedSearchResult={selectedSearchResult}
+                onQueryChange={onSearchQueryChanged}
+                onSelectResult={onSearchResultSelected}
+              />
+              <p className="empty-entities">
+                No path-derived model entities were found in known BehavioML scope directories.
+              </p>
+              <SelectedSearchMatchContext result={selectedSearchResult} />
+              <SelectedDiagnosticContext selection={selectedDiagnostic} />
+            </div>
+          )}
+        </section>
       ) : null}
 
       <section className="status-panel" aria-labelledby="validation-status-title">
@@ -188,21 +828,15 @@ export function App() {
           <ValidationDiagnostics
             selectedDiagnostic={selectedDiagnostic}
             validation={validation}
-            onSelectDiagnostic={handleDiagnosticSelected}
+            onSelectDiagnostic={onDiagnosticSelected}
           />
         ) : null}
-
-        <p className="status-note">
-          Archive extraction lives under <code>src/adapters/browser</code>; Validator integration is
-          isolated under <code>src/adapters/validator</code>. The React UI does not import the
-          Validator package directly.
-        </p>
       </section>
     </main>
   );
 }
 
-function WorkspaceOverview({ overview }: { readonly overview: WorkspaceOverviewViewModel }) {
+function WorkspaceOverviewLegacy({ overview }: { readonly overview: WorkspaceOverviewViewModel }) {
   return (
     <section className="overview-panel" aria-labelledby="workspace-overview-title">
       <p className="eyebrow">Overview</p>
@@ -231,13 +865,7 @@ function WorkspaceOverview({ overview }: { readonly overview: WorkspaceOverviewV
         </div>
         <div>
           <dt>Diagnostics</dt>
-          <dd>
-            {overview.diagnosticSummary.errors} error
-            {overview.diagnosticSummary.errors === 1 ? '' : 's'},{' '}
-            {overview.diagnosticSummary.warnings} warning
-            {overview.diagnosticSummary.warnings === 1 ? '' : 's'},{' '}
-            {overview.diagnosticSummary.other} info/other
-          </dd>
+          <dd>{formatDiagnosticSummary(overview)}</dd>
         </div>
       </dl>
 
@@ -260,112 +888,51 @@ function ScopeCountList({ overview }: { readonly overview: WorkspaceOverviewView
   );
 }
 
-function EntityBrowser({
-  diagnostics,
-  files,
+function EntityScopeList({
   index,
-  selectedDiagnostic,
   selectedEntity,
   onSelectEntity,
 }: {
-  readonly diagnostics: readonly DiagnosticViewModel[];
-  readonly files: readonly WorkspaceFileEntry[];
   readonly index: PathDerivedEntityIndex;
-  readonly selectedDiagnostic: DiagnosticSelection | undefined;
   readonly selectedEntity: PathDerivedEntitySelection;
   readonly onSelectEntity: (selection: PathDerivedEntitySelection) => void;
 }) {
-  const [searchText, setSearchText] = useState('');
-  const [selectedSearchResult, setSelectedSearchResult] = useState<SearchResult>();
-  const selected = findSelectedEntity(index, selectedEntity);
-  const sourceView = selected ? createSourceFileView(files, selected) : undefined;
-  const selectedDiagnostics = selected ? findDiagnosticsForEntity(diagnostics, selected) : [];
-  const searchResults = useMemo(
-    () => searchWorkspace({ query: searchText, files, entityIndex: index }),
-    [files, index, searchText],
-  );
-
-  function handleEntityListSelection(selection: PathDerivedEntitySelection) {
-    setSelectedSearchResult(undefined);
-    onSelectEntity(selection);
-  }
-
-  function handleSearchQueryChanged(query: string) {
-    setSearchText(query);
-    setSelectedSearchResult(undefined);
-  }
-
-  function handleSearchResultSelected(result: SearchResult) {
-    if (result.kind === 'entity') {
-      setSelectedSearchResult(undefined);
-    } else {
-      setSelectedSearchResult(result);
-    }
-
-    if (result.entityKey) {
-      onSelectEntity(result.entityKey);
-    }
-  }
-
   return (
-    <section className="entity-browser-panel" aria-labelledby="entity-browser-title">
-      <div className="entity-browser-heading">
-        <div>
-          <p className="eyebrow">Entities</p>
-          <h2 id="entity-browser-title">Path-derived entity browser</h2>
-          <p>
-            Entities below are inferred from workspace-relative paths under known BehavioML scope
-            directories. Explorer does not parse YAML or JSON content for semantic fields.
-          </p>
-        </div>
-        <strong className="entity-total">{index.totalEntities} total</strong>
-      </div>
+    <div className="entity-scope-list" aria-label="Path-derived entities grouped by scope">
+      {index.scopes.map((scopeGroup) => (
+        <section className="entity-scope-group" key={scopeGroup.scope}>
+          <h3>
+            <span>{scopeGroup.scope}</span>
+            <strong>{scopeGroup.entities.length}</strong>
+          </h3>
 
-      {index.totalEntities > 0 ? (
-        <div className="entity-browser-layout">
-          <div className="entity-browser-sidebar">
-            <SearchPanel
-              query={searchText}
-              results={searchResults}
-              selectedSearchResult={selectedSearchResult}
-              onQueryChange={handleSearchQueryChanged}
-              onSelectResult={handleSearchResultSelected}
-            />
-            <EntityScopeList
-              index={index}
-              selectedEntity={selectedEntity}
-              onSelectEntity={handleEntityListSelection}
-            />
-          </div>
-          <div className="entity-detail-stack">
-            <SelectedEntitySummary entity={selected} diagnosticCount={selectedDiagnostics.length} />
-            <SelectedDiagnosticContext selection={selectedDiagnostic} />
-            <SourcePanel
-              diagnostics={selectedDiagnostics}
-              entity={selected}
-              selectedDiagnostic={selectedDiagnostic}
-              selectedSearchResult={selectedSearchResult}
-              sourceView={sourceView}
-            />
-          </div>
-        </div>
-      ) : (
-        <div className="entity-detail-stack">
-          <SearchPanel
-            query={searchText}
-            results={searchResults}
-            selectedSearchResult={selectedSearchResult}
-            onQueryChange={handleSearchQueryChanged}
-            onSelectResult={handleSearchResultSelected}
-          />
-          <p className="empty-entities">
-            No path-derived model entities were found in known BehavioML scope directories.
-          </p>
-          <SelectedSearchMatchContext result={selectedSearchResult} />
-          <SelectedDiagnosticContext selection={selectedDiagnostic} />
-        </div>
-      )}
-    </section>
+          {scopeGroup.entities.length > 0 ? (
+            <ul>
+              {scopeGroup.entities.map((entity) => {
+                const isSelected =
+                  selectedEntity?.scope === entity.scope && selectedEntity.identity === entity.identity;
+
+                return (
+                  <li key={`${entity.scope}:${entity.identity}`}>
+                    <button
+                      className={isSelected ? 'entity-button entity-button--selected' : 'entity-button'}
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => onSelectEntity({ scope: entity.scope, identity: entity.identity })}
+                    >
+                      <span>{entity.displayName}</span>
+                      <code>{entity.identity}</code>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p>No entities in this scope.</p>
+          )}
+        </section>
+      ))}
+    </div>
   );
 }
 
@@ -450,60 +1017,6 @@ function SearchPanel({
   );
 }
 
-
-function EntityScopeList({
-  index,
-  selectedEntity,
-  onSelectEntity,
-}: {
-  readonly index: PathDerivedEntityIndex;
-  readonly selectedEntity: PathDerivedEntitySelection;
-  readonly onSelectEntity: (selection: PathDerivedEntitySelection) => void;
-}) {
-  return (
-    <div className="entity-scope-list" aria-label="Path-derived entities grouped by scope">
-      {index.scopes.map((scopeGroup) => (
-        <section className="entity-scope-group" key={scopeGroup.scope}>
-          <h3>
-            <span>{scopeGroup.scope}</span>
-            <strong>{scopeGroup.entities.length}</strong>
-          </h3>
-
-          {scopeGroup.entities.length > 0 ? (
-            <ul>
-              {scopeGroup.entities.map((entity) => {
-                const isSelected =
-                  selectedEntity?.scope === entity.scope &&
-                  selectedEntity.identity === entity.identity;
-
-                return (
-                  <li key={`${entity.scope}:${entity.identity}`}>
-                    <button
-                      className={
-                        isSelected ? 'entity-button entity-button--selected' : 'entity-button'
-                      }
-                      type="button"
-                      aria-pressed={isSelected}
-                      onClick={() =>
-                        onSelectEntity({ scope: entity.scope, identity: entity.identity })
-                      }
-                    >
-                      <span>{entity.displayName}</span>
-                      <code>{entity.identity}</code>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p>No entities in this scope.</p>
-          )}
-        </section>
-      ))}
-    </div>
-  );
-}
-
 function SelectedEntitySummary({
   entity,
   diagnosticCount,
@@ -513,21 +1026,16 @@ function SelectedEntitySummary({
 }) {
   if (!entity) {
     return (
-      <aside className="entity-summary" aria-label="Selected entity summary">
+      <section className="entity-summary" aria-label="Selected entity summary">
         <p className="empty-entities">Select an entity to see its path-derived summary.</p>
-      </aside>
+      </section>
     );
   }
 
   return (
-    <aside className="entity-summary" aria-label="Selected entity summary">
+    <section className="entity-summary" aria-label="Selected entity summary">
       <p className="eyebrow">Selected entity</p>
       <h3>{entity.displayName}</h3>
-      <p>
-        This summary is derived from the entity file path only. Semantic metadata, references, and
-        backlinks remain deferred to Validator-backed Explorer capabilities.
-      </p>
-
       <dl className="entity-summary-list">
         <div>
           <dt>Scope</dt>
@@ -536,10 +1044,6 @@ function SelectedEntitySummary({
         <div>
           <dt>Identity</dt>
           <dd>{entity.identity}</dd>
-        </div>
-        <div>
-          <dt>Display name</dt>
-          <dd>{entity.displayName}</dd>
         </div>
         <div>
           <dt>File path</dt>
@@ -556,7 +1060,7 @@ function SelectedEntitySummary({
           <dd>{diagnosticCount}</dd>
         </div>
       </dl>
-    </aside>
+    </section>
   );
 }
 
@@ -574,14 +1078,20 @@ function SourcePanel({
   readonly sourceView: SourceFileViewModel | undefined;
 }) {
   if (!entity) {
-    return null;
+    return (
+      <section className="source-panel" aria-labelledby="source-panel-title">
+        <p className="eyebrow">Source</p>
+        <h2 id="source-panel-title">Source</h2>
+        <p className="missing-source">Select an entity in the Explorer tree to inspect its raw source.</p>
+      </section>
+    );
   }
 
   if (!sourceView) {
     return (
       <section className="source-panel" aria-labelledby="source-panel-title">
         <p className="eyebrow">Source</p>
-        <h3 id="source-panel-title">Source</h3>
+        <h2 id="source-panel-title">Source</h2>
         <p className="missing-source">
           Source file <code>{entity.filePath}</code> is not available in the extracted workspace.
         </p>
@@ -593,13 +1103,31 @@ function SourcePanel({
 
   return (
     <section className="source-panel" aria-labelledby="source-panel-title">
-      <p className="eyebrow">Source</p>
-      <h3 id="source-panel-title">Source</h3>
-      <p>
-        Raw, read-only source text from the extracted workspace entry. Explorer does not parse this
-        YAML or JSON for semantic fields.
-      </p>
+      <div className="source-header-row">
+        <div>
+          <p className="eyebrow">Source</p>
+          <h2 id="source-panel-title">{sourceView.filePath}</h2>
+        </div>
+        <span>{sourceView.lineCount} lines</span>
+      </div>
 
+      <SelectedSearchMatchContext result={selectedSearchResult} />
+      <SelectedDiagnosticContext selection={selectedDiagnostic} />
+      <SelectedSourceDiagnostics diagnostics={diagnostics} />
+
+      <pre className="source-code"><code>{sourceView.content}</code></pre>
+    </section>
+  );
+}
+
+function SourceMetadata({ sourceView }: { readonly sourceView: SourceFileViewModel | undefined }) {
+  if (!sourceView) {
+    return null;
+  }
+
+  return (
+    <section className="source-metadata" aria-label="Selected source metadata">
+      <h3>Source file</h3>
       <dl className="source-metadata-list">
         <div>
           <dt>File path</dt>
@@ -620,21 +1148,11 @@ function SourcePanel({
           <dd>{sourceView.characterCount}</dd>
         </div>
       </dl>
-
-      <SelectedSearchMatchContext result={selectedSearchResult} />
-      <SelectedDiagnosticContext selection={selectedDiagnostic} />
-      <SelectedSourceDiagnostics diagnostics={diagnostics} />
-
-      <pre className="source-code"><code>{sourceView.content}</code></pre>
     </section>
   );
 }
 
-function SelectedSearchMatchContext({
-  result,
-}: {
-  readonly result: SearchResult | undefined;
-}) {
+function SelectedSearchMatchContext({ result }: { readonly result: SearchResult | undefined }) {
   if (!result || result.kind !== 'source_match') {
     return null;
   }
@@ -666,22 +1184,14 @@ function SelectedSearchMatchContext({
   );
 }
 
-
-function SelectedSourceDiagnostics({
-  diagnostics,
-}: {
-  readonly diagnostics: readonly DiagnosticViewModel[];
-}) {
+function SelectedSourceDiagnostics({ diagnostics }: { readonly diagnostics: readonly DiagnosticViewModel[] }) {
   return (
     <div className="selected-source-diagnostics" aria-label="Diagnostics for selected source file">
       <h4>Diagnostics for this file</h4>
       {diagnostics.length > 0 ? (
         <ul className="diagnostic-list diagnostic-list--compact">
           {diagnostics.map((diagnostic, index) => (
-            <DiagnosticItem
-              diagnostic={diagnostic}
-              key={`${diagnostic.filePath ?? 'source'}-${index}`}
-            />
+            <DiagnosticItem diagnostic={diagnostic} key={`${diagnostic.filePath ?? 'source'}-${index}`} />
           ))}
         </ul>
       ) : (
@@ -691,11 +1201,7 @@ function SelectedSourceDiagnostics({
   );
 }
 
-function SelectedDiagnosticContext({
-  selection,
-}: {
-  readonly selection: DiagnosticSelection | undefined;
-}) {
+function SelectedDiagnosticContext({ selection }: { readonly selection: DiagnosticSelection | undefined }) {
   if (!selection) {
     return null;
   }
@@ -715,9 +1221,7 @@ function SelectedDiagnosticContext({
         <div>
           <dt>Severity</dt>
           <dd>
-            <span className={`severity severity--${diagnostic.severity}`}>
-              {diagnostic.severity}
-            </span>
+            <span className={`severity severity--${diagnostic.severity}`}>{diagnostic.severity}</span>
           </dd>
         </div>
         <div>
@@ -726,9 +1230,7 @@ function SelectedDiagnosticContext({
         </div>
         <div>
           <dt>File path</dt>
-          <dd>
-            {diagnostic.filePath ? <code>{diagnostic.filePath}</code> : 'No file path reported'}
-          </dd>
+          <dd>{diagnostic.filePath ? <code>{diagnostic.filePath}</code> : 'No file path reported'}</dd>
         </div>
         {diagnostic.fieldPath ? (
           <div>
@@ -743,6 +1245,21 @@ function SelectedDiagnosticContext({
   );
 }
 
+function InspectorDiagnostics({
+  diagnostics,
+  validation,
+}: {
+  readonly diagnostics: readonly DiagnosticViewModel[];
+  readonly validation: ValidationResultViewModel | undefined;
+}) {
+  return (
+    <section className="inspector-diagnostics" aria-label="Inspector diagnostics summary">
+      <h3>Diagnostics</h3>
+      <p>{validation ? `${diagnostics.length} diagnostics for selected file.` : 'Validation not available.'}</p>
+    </section>
+  );
+}
+
 function ValidationDiagnostics({
   selectedDiagnostic,
   validation,
@@ -754,10 +1271,6 @@ function ValidationDiagnostics({
 }) {
   return (
     <div className="diagnostics-panel">
-      <p className="diagnostic-count">
-        Diagnostic count: <strong>{validation.diagnostics.length}</strong>
-      </p>
-
       {validation.diagnostics.length > 0 ? (
         <ul className="diagnostic-list">
           {validation.diagnostics.map((diagnostic, index) => (
@@ -816,6 +1329,56 @@ function DiagnosticItem({
   );
 }
 
+function ValidationActivitySummary({
+  validation,
+  workspaceOverview,
+}: {
+  readonly validation: ValidationResultViewModel | undefined;
+  readonly workspaceOverview: WorkspaceOverviewViewModel | undefined;
+}) {
+  if (!workspaceOverview) {
+    return <PlaceholderPanel title="Validation" message="Load a workspace to review Validator diagnostics." />;
+  }
+
+  return (
+    <section className="activity-summary">
+      <p>{formatValidationStatus(workspaceOverview.validationStatus)}</p>
+      <p>{formatDiagnosticSummary(workspaceOverview)}</p>
+      <p>
+        {validation
+          ? 'Use the bottom Problems-style panel to navigate diagnostics back to source context.'
+          : 'Validation status will update when the adapter completes.'}
+      </p>
+    </section>
+  );
+}
+
+function PlaceholderPanel({ title, message }: { readonly title: string; readonly message: string }) {
+  return (
+    <section className="placeholder-panel" aria-label={`${title} placeholder`}>
+      <h3>{title}</h3>
+      <p>{message}</p>
+    </section>
+  );
+}
+
+function EmptyWorkbenchState({
+  workspaceOverview,
+}: {
+  readonly workspaceOverview: WorkspaceOverviewViewModel | undefined;
+}) {
+  return (
+    <section className="placeholder-panel">
+      <h3>{workspaceOverview ? 'No model entities' : 'No workspace loaded'}</h3>
+      <p>
+        {workspaceOverview
+          ? 'No path-derived model entities were found in known BehavioML scope directories.'
+          : 'Load an archive from the top bar to populate the workbench explorer.'}
+      </p>
+    </section>
+  );
+}
+
 function formatSearchResultKey(result: SearchResult, fallbackIndex: number): string {
   return [
     result.kind,
@@ -826,7 +1389,6 @@ function formatSearchResultKey(result: SearchResult, fallbackIndex: number): str
     fallbackIndex,
   ].join(':');
 }
-
 
 function formatValidationStatus(status: WorkspaceOverviewValidationStatus): string {
   switch (status) {
@@ -841,4 +1403,45 @@ function formatValidationStatus(status: WorkspaceOverviewValidationStatus): stri
     case 'validation_unavailable':
       return 'Validation unavailable';
   }
+}
+
+function formatTopBarStatus(
+  status: Status,
+  validation: ValidationResultViewModel | undefined,
+): string {
+  if (validation) {
+    const summary = summarizeDiagnosticSeverities(validation.diagnostics);
+    return validation.ok
+      ? 'Health: 0 errors'
+      : `Health: ${summary.errors} errors, ${summary.warnings} warnings`;
+  }
+
+  return status.message;
+}
+
+function formatActivityTitle(activity: ActivityMode): string {
+  return activityItems.find((item) => item.id === activity)?.label ?? 'Explorer';
+}
+
+function formatDiagnosticSummary(overview: WorkspaceOverviewViewModel): string {
+  return `${overview.diagnosticSummary.errors} error${overview.diagnosticSummary.errors === 1 ? '' : 's'}, ${overview.diagnosticSummary.warnings} warning${overview.diagnosticSummary.warnings === 1 ? '' : 's'}, ${overview.diagnosticSummary.other} info/other`;
+}
+
+function summarizeDiagnosticSeverities(diagnostics: readonly DiagnosticViewModel[]) {
+  return diagnostics.reduce(
+    (summary, diagnostic) => {
+      const severity = diagnostic.severity.toLowerCase();
+
+      if (severity === 'error') {
+        return { ...summary, errors: summary.errors + 1 };
+      }
+
+      if (severity === 'warning' || severity === 'warn') {
+        return { ...summary, warnings: summary.warnings + 1 };
+      }
+
+      return { ...summary, other: summary.other + 1 };
+    },
+    { errors: 0, warnings: 0, other: 0 },
+  );
 }

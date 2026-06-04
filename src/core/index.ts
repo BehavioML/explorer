@@ -15,6 +15,8 @@ export type {
   PathDerivedModelEntity,
 } from './entityIndex';
 export type { DiagnosticSeverity, DiagnosticViewModel, ValidationResultViewModel } from './diagnostics';
+export { createSourceFileView, findSourceFileForEntity } from './sourceFileView';
+export type { SourceFileViewModel } from './sourceFileView';
 export {
   countWorkspaceScopes,
   createValidatedWorkspaceOverview,

@@ -4,6 +4,7 @@ import { validateInMemoryModelWorkspace } from '../adapters/validator';
 import {
   BEHAVIOML_MODEL_SCOPE_DIRECTORIES,
   createPathDerivedEntityIndex,
+  createSourceFileView,
   createValidatedWorkspaceOverview,
   createWorkspaceOverview,
   findSelectedEntity,
@@ -12,7 +13,9 @@ import {
   type PathDerivedEntityIndex,
   type PathDerivedEntitySelection,
   type PathDerivedModelEntity,
+  type SourceFileViewModel,
   type ValidationResultViewModel,
+  type WorkspaceFileEntry,
   type WorkspaceOverviewValidationStatus,
   type WorkspaceOverviewViewModel,
 } from '../core';
@@ -29,6 +32,7 @@ export function App() {
     message: 'No workspace loaded. Choose a .tgz or .tar.gz archive to validate it in memory.',
   });
   const [workspaceOverview, setWorkspaceOverview] = useState<WorkspaceOverviewViewModel>();
+  const [workspaceFiles, setWorkspaceFiles] = useState<readonly WorkspaceFileEntry[]>([]);
   const [entityIndex, setEntityIndex] = useState<PathDerivedEntityIndex>();
   const [selectedEntity, setSelectedEntity] = useState<PathDerivedEntitySelection>();
 
@@ -38,12 +42,14 @@ export function App() {
     }
 
     setWorkspaceOverview(undefined);
+    setWorkspaceFiles([]);
     setEntityIndex(undefined);
     setSelectedEntity(undefined);
     setStatus({ kind: 'loading', message: `Extracting ${file.name} in the browser...` });
 
     try {
       const workspace = await extractUploadedArchive({ kind: 'uploaded_archive', file });
+      setWorkspaceFiles(workspace.files);
       const nextEntityIndex = createPathDerivedEntityIndex(workspace.files);
       setEntityIndex(nextEntityIndex);
       setSelectedEntity(getDefaultEntitySelection(nextEntityIndex));
@@ -139,6 +145,7 @@ export function App() {
       {entityIndex ? (
         <EntityBrowser
           diagnostics={validation?.diagnostics ?? []}
+          files={workspaceFiles}
           index={entityIndex}
           selectedEntity={selectedEntity}
           onSelectEntity={setSelectedEntity}
@@ -222,17 +229,20 @@ function ScopeCountList({ overview }: { readonly overview: WorkspaceOverviewView
 
 function EntityBrowser({
   diagnostics,
+  files,
   index,
   selectedEntity,
   onSelectEntity,
 }: {
   readonly diagnostics: readonly DiagnosticViewModel[];
+  readonly files: readonly WorkspaceFileEntry[];
   readonly index: PathDerivedEntityIndex;
   readonly selectedEntity: PathDerivedEntitySelection;
   readonly onSelectEntity: (selection: PathDerivedEntitySelection) => void;
 }) {
   const selected = findSelectedEntity(index, selectedEntity);
-  const selectedDiagnostics = selected ? diagnosticsForFile(diagnostics, selected.filePath) : [];
+  const sourceView = selected ? createSourceFileView(files, selected) : undefined;
+  const selectedDiagnostics = sourceView ? diagnosticsForFile(diagnostics, sourceView.filePath) : [];
 
   return (
     <section className="entity-browser-panel" aria-labelledby="entity-browser-title">
@@ -255,7 +265,14 @@ function EntityBrowser({
             selectedEntity={selectedEntity}
             onSelectEntity={onSelectEntity}
           />
-          <SelectedEntitySummary entity={selected} diagnosticCount={selectedDiagnostics.length} />
+          <div className="entity-detail-stack">
+            <SelectedEntitySummary entity={selected} diagnosticCount={selectedDiagnostics.length} />
+            <SourcePanel
+              diagnostics={selectedDiagnostics}
+              entity={selected}
+              sourceView={sourceView}
+            />
+          </div>
         </div>
       ) : (
         <p className="empty-entities">
@@ -372,6 +389,92 @@ function SelectedEntitySummary({
         </div>
       </dl>
     </aside>
+  );
+}
+
+function SourcePanel({
+  diagnostics,
+  entity,
+  sourceView,
+}: {
+  readonly diagnostics: readonly DiagnosticViewModel[];
+  readonly entity: PathDerivedModelEntity | undefined;
+  readonly sourceView: SourceFileViewModel | undefined;
+}) {
+  if (!entity) {
+    return null;
+  }
+
+  if (!sourceView) {
+    return (
+      <section className="source-panel" aria-labelledby="source-panel-title">
+        <p className="eyebrow">Source</p>
+        <h3 id="source-panel-title">Source</h3>
+        <p className="missing-source">
+          Source file <code>{entity.filePath}</code> is not available in the extracted workspace.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="source-panel" aria-labelledby="source-panel-title">
+      <p className="eyebrow">Source</p>
+      <h3 id="source-panel-title">Source</h3>
+      <p>
+        Raw, read-only source text from the extracted workspace entry. Explorer does not parse this
+        YAML or JSON for semantic fields.
+      </p>
+
+      <dl className="source-metadata-list">
+        <div>
+          <dt>File path</dt>
+          <dd>
+            <code>{sourceView.filePath}</code>
+          </dd>
+        </div>
+        <div>
+          <dt>Extension</dt>
+          <dd>{sourceView.extension}</dd>
+        </div>
+        <div>
+          <dt>Line count</dt>
+          <dd>{sourceView.lineCount}</dd>
+        </div>
+        <div>
+          <dt>Characters</dt>
+          <dd>{sourceView.characterCount}</dd>
+        </div>
+      </dl>
+
+      <SelectedSourceDiagnostics diagnostics={diagnostics} />
+
+      <pre className="source-code"><code>{sourceView.content}</code></pre>
+    </section>
+  );
+}
+
+function SelectedSourceDiagnostics({
+  diagnostics,
+}: {
+  readonly diagnostics: readonly DiagnosticViewModel[];
+}) {
+  return (
+    <div className="selected-source-diagnostics" aria-label="Diagnostics for selected source file">
+      <h4>Diagnostics for this file</h4>
+      {diagnostics.length > 0 ? (
+        <ul className="diagnostic-list diagnostic-list--compact">
+          {diagnostics.map((diagnostic, index) => (
+            <DiagnosticItem
+              diagnostic={diagnostic}
+              key={`${diagnostic.filePath ?? 'source'}-${index}`}
+            />
+          ))}
+        </ul>
+      ) : (
+        <p className="empty-diagnostics">No Validator diagnostics match this source file path.</p>
+      )}
+    </div>
   );
 }
 

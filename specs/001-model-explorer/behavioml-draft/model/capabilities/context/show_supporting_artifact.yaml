@@ -1,0 +1,8 @@
+description: |
+  Open a discovered source specification, compliance artifact, or traceability map as supporting context separate from model source content.
+
+requires:
+  - artifacts/supporting_artifact_reader
+
+events:
+  - artifacts/supporting_artifact_opened

@@ -1,0 +1,10 @@
+description: |
+  Invoke the embedded or reused BehavioML Validator to validate the loaded workspace and refresh model diagnostics.
+
+requires:
+  - validator/validator_engine
+
+events:
+  - validation/validation_requested
+  - validation/diagnostics_refreshed
+  - validation/validation_unavailable

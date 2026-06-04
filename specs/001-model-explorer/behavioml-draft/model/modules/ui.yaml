@@ -1,0 +1,2 @@
+description: |
+  Replaceable presentation and interaction-adaptation boundary. React may live here initially, but semantic ownership remains outside this module.

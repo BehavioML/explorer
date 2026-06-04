@@ -1,0 +1,27 @@
+description: |
+  UI-independent semantic application boundary for coordinating workspace loading, model indexing, navigation, search, diagnostics display, artifact discovery, and source access.
+
+implements:
+  capabilities:
+    - workspace/detect_workspace_root
+    - workspace/discover_supporting_artifacts
+    - workspace/discover_generated_artifacts
+    - workspace/show_overview
+    - model/index_entities
+    - model/resolve_references
+    - model/index_backlinks
+    - navigation/select_entity
+    - navigation/switch_view
+    - navigation/follow_reference
+    - navigation/show_backlinks
+    - navigation/follow_backlink
+    - navigation/preserve_context
+    - search/search_workspace
+    - search/open_search_result
+    - validation/show_diagnostics
+    - validation/open_diagnostic_target
+    - source/open_yaml
+    - artifacts/show_generated_artifact
+    - context/show_supporting_artifact
+
+belongs_to: core

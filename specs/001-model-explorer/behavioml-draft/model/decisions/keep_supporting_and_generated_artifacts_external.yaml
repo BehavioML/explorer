@@ -1,0 +1,14 @@
+description: |
+  Keep source specs, compliance artifacts, traceability maps, generated diagrams, reports, and validation output distinct from BehavioML model source.
+
+rationale: |
+  The source spec, IA, plan, and BehavioML rules all identify generated and supporting artifacts as views or context rather than source-of-truth model content.
+
+consequences: |
+  The draft models artifact inspection behavior and artifact entities, but does not place generated artifacts inside core model semantics or make supporting artifacts model scopes.
+
+affects:
+  - entities:generated_artifact
+  - entities:supporting_artifact
+  - capabilities:artifacts/show_generated_artifact
+  - capabilities:context/show_supporting_artifact

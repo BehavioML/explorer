@@ -1,0 +1,16 @@
+description: |
+  The user opens a discovered generated diagram, report, or derived artifact without treating it as model source of truth.
+
+roles:
+  primary: user
+  participants:
+    - explorer
+
+steps:
+  - from: user
+    to: explorer
+    capability: artifacts/show_generated_artifact
+    label: Open generated artifact
+  - from: explorer
+    capability: navigation/preserve_context
+    label: Preserve related model context when known

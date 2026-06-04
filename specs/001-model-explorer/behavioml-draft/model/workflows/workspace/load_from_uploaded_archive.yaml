@@ -1,0 +1,37 @@
+description: |
+  The user loads a read-only BehavioML workspace from an uploaded `.tgz` or `.tar.gz` archive.
+
+roles:
+  primary: user
+  participants:
+    - explorer
+
+steps:
+  - from: user
+    to: explorer
+    capability: workspace/load_uploaded_archive
+    label: Provide uploaded archive
+  - from: explorer
+    capability: workspace/extract_archive
+    label: Extract supported archive content
+  - from: explorer
+    capability: workspace/detect_workspace_root
+    label: Detect supported workspace root
+  - from: explorer
+    capability: model/index_entities
+    label: Index model entities by scope and path identity
+  - from: explorer
+    capability: model/resolve_references
+    label: Resolve semantic model references
+  - from: explorer
+    capability: model/index_backlinks
+    label: Index incoming model references
+  - from: explorer
+    capability: workspace/discover_generated_artifacts
+    label: Discover generated artifacts when present
+  - from: explorer
+    capability: workspace/discover_supporting_artifacts
+    label: Discover supporting source and compliance artifacts when present
+  - from: explorer
+    capability: workspace/show_overview
+    label: Present workspace overview

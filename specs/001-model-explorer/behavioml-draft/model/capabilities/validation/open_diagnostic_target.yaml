@@ -1,0 +1,2 @@
+description: |
+  Navigate from a diagnostic to its affected model entity or source YAML location when Validator source information is available.

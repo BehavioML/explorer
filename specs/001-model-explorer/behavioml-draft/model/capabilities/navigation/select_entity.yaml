@@ -1,0 +1,5 @@
+description: |
+  Select a workflow, role, capability, interface, component, module, entity, event, state machine, or decision as the current semantic inspection context.
+
+events:
+  - navigation/entity_selected

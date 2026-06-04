@@ -1,0 +1,8 @@
+description: |
+  Index model entities by BehavioML scope and path identity using semantic model information from the Validator where available.
+
+requires:
+  - validator/validator_engine
+
+events:
+  - model/model_index_available

@@ -1,0 +1,5 @@
+description: |
+  Discover generated diagrams, reports, validation output, and derived artifacts when present without treating them as source-of-truth model files.
+
+requires:
+  - artifacts/generated_artifact_reader

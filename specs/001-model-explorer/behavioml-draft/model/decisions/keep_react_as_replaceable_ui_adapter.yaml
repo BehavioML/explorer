@@ -1,0 +1,13 @@
+description: |
+  Represent React only as a replaceable UI adapter/component boundary when modeled.
+
+rationale: |
+  The technical plan chooses Vite, React, and TypeScript for an initial UI shell while requiring semantic model processing to remain UI-independent.
+
+consequences: |
+  The `react_ui` component does not implement semantic capabilities and belongs to the UI module only.
+
+affects:
+  - components:react_ui
+  - modules:ui
+  - components:explorer_core

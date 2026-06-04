@@ -1,0 +1,5 @@
+description: |
+  Resolve BehavioML references according to semantic field scopes and expose unresolved references for diagnostics and navigation.
+
+requires:
+  - validator/validator_engine

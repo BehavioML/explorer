@@ -1,0 +1,8 @@
+description: |
+  Open exact source YAML for a selected model entity or diagnostic source location for trust, precision, and debugging.
+
+requires:
+  - source/source_yaml_reader
+
+events:
+  - source/source_yaml_opened

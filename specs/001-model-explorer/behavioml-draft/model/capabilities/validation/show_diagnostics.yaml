@@ -1,0 +1,2 @@
+description: |
+  Show global and entity-contextual Validator diagnostics with severity, affected entity, source file, and navigation target context when available.

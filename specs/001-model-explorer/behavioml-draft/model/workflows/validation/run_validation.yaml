@@ -1,0 +1,21 @@
+description: |
+  The user validates or refreshes validation for the loaded workspace through the embedded or reused Validator.
+
+roles:
+  primary: user
+  participants:
+    - explorer
+    - validator
+
+steps:
+  - from: user
+    to: explorer
+    capability: validation/run_validation
+    label: Request workspace validation
+  - from: explorer
+    to: validator
+    capability: validation/run_validation
+    label: Invoke Validator semantic engine
+  - from: explorer
+    capability: validation/show_diagnostics
+    label: Present refreshed diagnostics context

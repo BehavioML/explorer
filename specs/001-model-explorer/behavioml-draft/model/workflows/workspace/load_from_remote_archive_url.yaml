@@ -1,0 +1,36 @@
+description: |
+  The user loads a read-only BehavioML workspace from a public unauthenticated remote archive URL when browser retrieval is possible.
+
+roles:
+  primary: user
+  participants:
+    - explorer
+    - archive_source
+
+steps:
+  - from: user
+    to: explorer
+    capability: workspace/load_remote_archive
+    label: Provide public archive URL
+  - from: explorer
+    to: archive_source
+    capability: workspace/load_remote_archive
+    label: Retrieve archive bytes directly when possible
+  - from: explorer
+    capability: workspace/extract_archive
+    label: Extract supported archive content
+  - from: explorer
+    capability: workspace/detect_workspace_root
+    label: Detect supported workspace root
+  - from: explorer
+    capability: model/index_entities
+    label: Index model entities by scope and path identity
+  - from: explorer
+    capability: model/resolve_references
+    label: Resolve semantic model references
+  - from: explorer
+    capability: model/index_backlinks
+    label: Index incoming model references
+  - from: explorer
+    capability: workspace/show_overview
+    label: Present workspace overview

@@ -1,0 +1,19 @@
+description: |
+  The user follows a displayed BehavioML reference whose target can be resolved.
+
+roles:
+  primary: user
+  participants:
+    - explorer
+
+steps:
+  - from: user
+    to: explorer
+    capability: navigation/follow_reference
+    label: Follow resolvable displayed reference
+  - from: explorer
+    capability: navigation/select_entity
+    label: Select referenced entity
+  - from: explorer
+    capability: navigation/preserve_context
+    label: Preserve return context

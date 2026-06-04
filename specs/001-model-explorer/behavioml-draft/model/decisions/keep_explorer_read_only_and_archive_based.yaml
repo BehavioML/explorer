@@ -1,0 +1,14 @@
+description: |
+  Model the Explorer as a read-only archive-based semantic browser for the MVP.
+
+rationale: |
+  The inspected source spec scopes loading to uploaded archives and public unauthenticated archive URLs, explicitly deferring editing, repository-provider integration, authenticated access, and backend fetching.
+
+consequences: |
+  The behavior model focuses on archive loading, root detection, semantic navigation, validation, and artifact inspection rather than repository browsing or editing.
+
+affects:
+  - workflows:workspace/load_from_uploaded_archive
+  - workflows:workspace/load_from_remote_archive_url
+  - capabilities:workspace/load_uploaded_archive
+  - capabilities:workspace/load_remote_archive

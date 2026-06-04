@@ -1,0 +1,5 @@
+description: |
+  Index incoming references for model entities from resolved semantic references using Validator-provided or Validator-consistent reference graph information.
+
+requires:
+  - validator/validator_engine

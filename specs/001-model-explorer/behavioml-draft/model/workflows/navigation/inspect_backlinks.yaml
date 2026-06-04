@@ -1,0 +1,23 @@
+description: |
+  The user inspects incoming references for the selected entity and may follow a backlink to its source entity.
+
+roles:
+  primary: user
+  participants:
+    - explorer
+
+steps:
+  - from: user
+    to: explorer
+    capability: navigation/show_backlinks
+    label: Inspect incoming references
+  - from: user
+    to: explorer
+    capability: navigation/follow_backlink
+    label: Follow selected backlink
+  - from: explorer
+    capability: navigation/select_entity
+    label: Select referencing entity
+  - from: explorer
+    capability: navigation/preserve_context
+    label: Preserve backlink context

@@ -1,0 +1,16 @@
+description: |
+  Model the Validator as the semantic engine dependency for validation, model interpretation, reference resolution, backlinks, diagnostics, and source locations.
+
+rationale: |
+  The source spec and technical plan state that the Explorer should reuse the BehavioML Validator and should not independently reimplement parser, resolver, reference graph, or diagnostics semantics.
+
+consequences: |
+  Explorer capabilities reference the validator engine boundary, and Validator appears as a role only where the workflow makes that dependency observable.
+
+affects:
+  - roles:validator
+  - interfaces:validator/validator_engine
+  - components:validator_adapter
+  - capabilities:validation/run_validation
+  - capabilities:model/resolve_references
+  - capabilities:model/index_backlinks

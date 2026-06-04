@@ -1,0 +1,16 @@
+description: |
+  The user opens a discovered source specification or compliance artifact as supporting context outside the BehavioML model source.
+
+roles:
+  primary: user
+  participants:
+    - explorer
+
+steps:
+  - from: user
+    to: explorer
+    capability: context/show_supporting_artifact
+    label: Open supporting artifact
+  - from: explorer
+    capability: navigation/preserve_context
+    label: Preserve related model context when traceability exists

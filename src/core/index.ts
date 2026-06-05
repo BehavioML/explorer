@@ -71,6 +71,7 @@ export {
 } from './diagrams';
 export type {
   GeneratedDiagramArtifactViewModel,
+  GeneratedDiagramRenderError,
   GeneratedDiagramSourceEntity,
   GeneratedDiagramStatus,
   SelectedEntityDiagramViewModel,

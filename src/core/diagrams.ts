@@ -17,6 +17,10 @@ export interface GeneratedDiagramSourceEntity {
   readonly id: string;
 }
 
+export interface GeneratedDiagramRenderError {
+  readonly message: string;
+}
+
 export interface GeneratedDiagramArtifactViewModel {
   readonly kind: string;
   readonly format: string;
@@ -24,6 +28,7 @@ export interface GeneratedDiagramArtifactViewModel {
   readonly path: string;
   readonly content: string;
   readonly sourceEntity?: GeneratedDiagramSourceEntity;
+  readonly sourceMap?: unknown;
   readonly diagnostics: readonly DiagnosticViewModel[];
 }
 
@@ -33,6 +38,8 @@ export interface SelectedEntityDiagramViewModel {
   readonly message: string;
   readonly sourceEntity?: GeneratedDiagramSourceEntity;
   readonly artifact?: GeneratedDiagramArtifactViewModel;
+  readonly renderedSvg?: string;
+  readonly renderError?: GeneratedDiagramRenderError;
   readonly diagnostics: readonly DiagnosticViewModel[];
 }
 

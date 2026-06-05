@@ -6,6 +6,7 @@ import {
   type CanonicalExampleId,
 } from '../adapters/browser';
 import { generateDiagramArtifactForEntity } from '../adapters/generator';
+import { renderMermaidDiagram } from '../adapters/mermaid';
 import { validateInMemoryModelWorkspace } from '../adapters/validator';
 import {
   BEHAVIOML_MODEL_SCOPE_DIRECTORIES,
@@ -222,16 +223,18 @@ export function App() {
     }
 
     let cancelled = false;
-    void generateDiagramArtifactForEntity(workspaceFiles, selected).then((diagramView) => {
-      if (cancelled) {
-        return;
-      }
+    void generateDiagramArtifactForEntity(workspaceFiles, selected)
+      .then((diagramView) => renderSelectedDiagramView(diagramView, activeDiagramCacheKey))
+      .then((diagramView) => {
+        if (cancelled) {
+          return;
+        }
 
-      setDiagramCache((cache) => ({
-        ...cache,
-        [activeDiagramCacheKey]: diagramView,
-      }));
-    });
+        setDiagramCache((cache) => ({
+          ...cache,
+          [activeDiagramCacheKey]: diagramView,
+        }));
+      });
 
     return () => {
       cancelled = true;
@@ -628,7 +631,7 @@ function ExplorerPanel({
       {activeActivity === 'diagrams' ? (
         <PlaceholderPanel
           title="Diagrams"
-          message="Open an entity tab and select Diagram to lazily request Generator-owned Mermaid artifacts. Rendered diagram canvas support remains future work."
+          message="Open a workflow entity tab and select Diagram to lazily request Generator-owned Mermaid artifacts, render them as SVG, and preserve source-map metadata for future navigation."
         />
       ) : null}
 
@@ -953,12 +956,61 @@ function DiagramView({
           </dl>
         ) : null}
         <DiagramDiagnostics diagnostics={view.diagnostics} />
+        {view.renderError ? (
+          <div className="diagram-render-error" role="alert">
+            <strong>Mermaid render error</strong>
+            <p>{view.renderError.message}</p>
+          </div>
+        ) : null}
+        {view.renderedSvg ? <RenderedDiagramSvg svg={view.renderedSvg} /> : null}
+        {artifact?.sourceMap !== undefined ? <DiagramSourceMapMetadata sourceMap={artifact.sourceMap} /> : null}
         {artifact?.content ? (
-          <pre className="diagram-source" aria-label="Generated Mermaid source"><code>{artifact.content}</code></pre>
+          <details className="diagram-source-fallback" open={!view.renderedSvg}>
+            <summary>Mermaid source fallback</summary>
+            <pre className="diagram-source" aria-label="Generated Mermaid source"><code>{artifact.content}</code></pre>
+          </details>
         ) : null}
       </div>
     </section>
   );
+}
+
+function RenderedDiagramSvg({ svg }: { readonly svg: string }) {
+  return (
+    <div
+      className="diagram-svg-canvas"
+      aria-label="Rendered Mermaid diagram"
+      // Mermaid is initialized with securityLevel: 'strict' and htmlLabels: false in
+      // src/adapters/mermaid, so this isolated injection displays renderer-owned SVG
+      // without enabling arbitrary HTML labels from user-provided workspace content.
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
+  );
+}
+
+function DiagramSourceMapMetadata({ sourceMap }: { readonly sourceMap: unknown }) {
+  return (
+    <details className="diagram-source-map-metadata">
+      <summary>{formatSourceMapSummary(sourceMap)}</summary>
+      <pre>{formatSourceMapMetadata(sourceMap)}</pre>
+    </details>
+  );
+}
+
+function formatSourceMapSummary(sourceMap: unknown): string {
+  if (Array.isArray(sourceMap)) {
+    return `Source-map metadata (${sourceMap.length} entries)`;
+  }
+
+  return 'Source-map metadata';
+}
+
+function formatSourceMapMetadata(sourceMap: unknown): string {
+  try {
+    return JSON.stringify(sourceMap, null, 2) ?? String(sourceMap);
+  } catch {
+    return String(sourceMap);
+  }
 }
 
 function DiagramDiagnostics({ diagnostics }: { readonly diagnostics: readonly DiagnosticViewModel[] }) {
@@ -978,6 +1030,31 @@ function DiagramDiagnostics({ diagnostics }: { readonly diagnostics: readonly Di
       </ul>
     </div>
   );
+}
+
+async function renderSelectedDiagramView(
+  diagramView: SelectedEntityDiagramViewModel,
+  cacheKey: string,
+): Promise<SelectedEntityDiagramViewModel> {
+  const artifact = diagramView.artifact;
+
+  if (!artifact?.content || artifact.format !== 'mermaid') {
+    return diagramView;
+  }
+
+  const result = await renderMermaidDiagram(artifact.content, { diagramId: `behavioml-${cacheKey}` });
+
+  if (result.status === 'render_error') {
+    return {
+      ...diagramView,
+      renderError: { message: result.message },
+    };
+  }
+
+  return {
+    ...diagramView,
+    renderedSvg: result.svg,
+  };
 }
 
 function createDiagramCacheKey(entity: Pick<PathDerivedModelEntity, 'scope' | 'identity'>): string {

@@ -99,3 +99,26 @@ test('Generator package imports remain isolated to the generator adapter', async
     'Only src/adapters/generator may reference @behavioml/generator',
   );
 });
+
+test('React UI does not import Mermaid directly', async () => {
+  const sources = await readSources('src/ui-react');
+
+  for (const { file, content } of sources) {
+    assert.doesNotMatch(content, /from ['"]mermaid['"]|import\(['"]mermaid['"]\)/, `${file} must use adapter boundaries`);
+  }
+});
+
+test('Mermaid package imports remain isolated to the Mermaid adapter', async () => {
+  const sources = await readSources('src');
+  const offenders = sources.filter(
+    ({ file, content }) =>
+      (/from ['"]mermaid['"]|import\(['"]mermaid['"]\)/).test(content) &&
+      !file.startsWith('src/adapters/mermaid/'),
+  );
+
+  assert.deepEqual(
+    offenders.map((offender) => offender.file),
+    [],
+    'Only src/adapters/mermaid may import mermaid',
+  );
+});

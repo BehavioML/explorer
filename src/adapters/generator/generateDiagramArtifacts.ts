@@ -70,6 +70,7 @@ interface GeneratorArtifactLike {
   readonly content?: unknown;
   readonly sourceEntity?: unknown;
   readonly diagnostics?: unknown;
+  readonly sourceMap?: unknown;
 }
 
 export async function generateDiagramArtifactsForWorkspace(
@@ -153,6 +154,7 @@ export function toGeneratedDiagramArtifactViewModel(rawArtifact: unknown): Gener
   const artifact = asObject<GeneratorArtifactLike>(rawArtifact);
   const diagnostics = toDiagnosticArray(artifact?.diagnostics);
   const sourceEntity = toSourceEntityViewModel(artifact?.sourceEntity);
+  const sourceMap = artifact?.sourceMap;
   const kind = readString(artifact?.kind) ?? 'malformed-artifact';
   const format = readString(artifact?.format) ?? 'text';
   const path = readString(artifact?.path) ?? '';
@@ -182,6 +184,7 @@ export function toGeneratedDiagramArtifactViewModel(rawArtifact: unknown): Gener
     path,
     content,
     ...(sourceEntity ? { sourceEntity } : {}),
+    ...(sourceMap !== undefined ? { sourceMap } : {}),
     diagnostics,
   };
 }

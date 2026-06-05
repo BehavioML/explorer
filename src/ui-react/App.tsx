@@ -599,22 +599,47 @@ function WorkspaceOverviewPanel({
 }
 
 function DiagramPlaceholder({ entity }: { readonly entity: PathDerivedModelEntity | undefined }) {
+  const placeholderLabel = formatDiagramPlaceholderLabel(entity);
+
   return (
     <section className="diagram-placeholder" aria-labelledby="diagram-placeholder-title">
-      <p className="eyebrow">Diagram</p>
-      <h2 id="diagram-placeholder-title">
-        {entity ? `Diagram: ${entity.displayName}` : 'Diagram workspace'}
-      </h2>
-      <div className="diagram-placeholder-box">
-        <p>Diagram rendering is future work.</p>
-        <p>
-          Future diagrams will live in the main workspace as navigation aids and connect back to
-          source and model relationships. This implementation does not generate diagrams, infer
-          relationships, or render fake diagram content.
-        </p>
+      <div className="diagram-title-row">
+        <div>
+          <p className="eyebrow">Diagram</p>
+          <h2 id="diagram-placeholder-title">
+            {entity ? `Diagram: ${entity.displayName}` : 'Diagram workspace'}
+          </h2>
+        </div>
+        {entity ? <span>{entity.scope}</span> : null}
+      </div>
+      <div className="diagram-canvas-placeholder" role="img" aria-label={placeholderLabel}>
+        <div className="diagram-canvas-grid" aria-hidden="true" />
+        <div className="diagram-canvas-message">
+          <strong>{placeholderLabel}</strong>
+          <span>
+            Empty canvas reserved for future diagram rendering. No relationships are inferred and no
+            fake diagram elements are rendered.
+          </span>
+        </div>
       </div>
     </section>
   );
+}
+
+function formatDiagramPlaceholderLabel(entity: PathDerivedModelEntity | undefined): string {
+  if (!entity) {
+    return 'No diagram view available for this entity type';
+  }
+
+  if (entity.scope === 'workflows') {
+    return 'Workflow / sequence diagram area';
+  }
+
+  if (entity.scope === 'state-machines') {
+    return 'State machine diagram area';
+  }
+
+  return 'No diagram view available for this entity type';
 }
 
 function InspectorPanel({

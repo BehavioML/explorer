@@ -42,7 +42,7 @@ export interface UnresolvedReferenceTargetGroup {
   readonly references: readonly SemanticReferenceViewModel[];
 }
 
-export type RelationshipNavigationRole = 'source' | 'target';
+export type RelationshipNavigationSide = 'source' | 'target';
 
 export type RelationshipNavigationTarget =
   | {
@@ -53,7 +53,13 @@ export type RelationshipNavigationTarget =
       readonly status: 'unresolved_reference';
     }
   | {
+      readonly status: 'missing_source';
+    }
+  | {
       readonly status: 'missing_target';
+    }
+  | {
+      readonly status: 'unmatched_source';
     }
   | {
       readonly status: 'unmatched_target';
@@ -129,22 +135,22 @@ export function groupUnresolvedReferencesByTarget(
 export function createRelationshipNavigationTarget(
   index: PathDerivedEntityIndex,
   reference: SemanticReferenceViewModel,
-  role: RelationshipNavigationRole = 'target',
+  side: RelationshipNavigationSide,
 ): RelationshipNavigationTarget {
-  const navigationEntity = role === 'source' ? reference.source : reference.target;
-
-  if (!navigationEntity && !reference.resolved) {
+  if (side === 'target' && !reference.resolved) {
     return { status: 'unresolved_reference' };
   }
 
+  const navigationEntity = side === 'source' ? reference.source : reference.target;
+
   if (!navigationEntity) {
-    return { status: 'missing_target' };
+    return { status: side === 'source' ? 'missing_source' : 'missing_target' };
   }
 
   const matchingEntity = findPathDerivedEntityForReferenceEntity(index, navigationEntity);
 
   if (!matchingEntity) {
-    return { status: 'unmatched_target' };
+    return { status: side === 'source' ? 'unmatched_source' : 'unmatched_target' };
   }
 
   return {

@@ -27,7 +27,7 @@ import {
   type PathDerivedModelEntity,
   type SearchResult,
   type SelectedEntityRelationshipsViewModel,
-  type RelationshipNavigationRole,
+  type RelationshipNavigationSide,
   type SemanticReferenceViewModel,
   type SourceFileViewModel,
   type ValidationResultViewModel,
@@ -221,13 +221,13 @@ export function App() {
 
   function handleRelationshipTargetSelected(
     reference: SemanticReferenceViewModel,
-    role: RelationshipNavigationRole,
+    side: RelationshipNavigationSide,
   ) {
     if (!entityIndex) {
       return;
     }
 
-    const navigationTarget = createRelationshipNavigationTarget(entityIndex, reference, role);
+    const navigationTarget = createRelationshipNavigationTarget(entityIndex, reference, side);
 
     if (navigationTarget.status === 'matched_entity') {
       setSelectedEntity(navigationTarget.entityKey);
@@ -497,7 +497,7 @@ function ExplorerPanel({
   readonly workspaceOverview: WorkspaceOverviewViewModel | undefined;
   readonly onRelationshipTargetSelected: (
     reference: SemanticReferenceViewModel,
-    role: RelationshipNavigationRole,
+    side: RelationshipNavigationSide,
   ) => void;
   readonly onSearchQueryChanged: (query: string) => void;
   readonly onSearchResultSelected: (result: SearchResult) => void;
@@ -1414,7 +1414,7 @@ function RelationshipsPanel({
   onSelectTarget,
 }: {
   readonly relationships: SelectedEntityRelationshipsViewModel | undefined;
-  readonly onSelectTarget: (reference: SemanticReferenceViewModel, role: RelationshipNavigationRole) => void;
+  readonly onSelectTarget: (reference: SemanticReferenceViewModel, side: RelationshipNavigationSide) => void;
 }) {
   if (!relationships) {
     return (
@@ -1436,21 +1436,21 @@ function RelationshipsPanel({
         title="Outgoing references"
         emptyMessage="No outgoing semantic references for this entity."
         references={relationships.outgoingReferences}
-        navigationRole="target"
+        navigationSide="target"
         onSelectTarget={onSelectTarget}
       />
       <RelationshipReferenceList
         title="Incoming references / backlinks"
         emptyMessage="No incoming backlinks for this entity."
         references={relationships.incomingReferences}
-        navigationRole="source"
+        navigationSide="source"
         onSelectTarget={onSelectTarget}
       />
       <RelationshipReferenceList
         title="Unresolved references involving this entity"
         emptyMessage="No unresolved references involving this entity."
         references={relationships.unresolvedReferences}
-        navigationRole="target"
+        navigationSide="target"
         onSelectTarget={onSelectTarget}
       />
       {relationships.unresolvedReferencesByTarget.length > 0 ? (
@@ -1472,16 +1472,16 @@ function RelationshipsPanel({
 
 function RelationshipReferenceList({
   emptyMessage,
-  navigationRole,
+  navigationSide,
   references,
   title,
   onSelectTarget,
 }: {
   readonly emptyMessage: string;
-  readonly navigationRole: RelationshipNavigationRole;
+  readonly navigationSide: RelationshipNavigationSide;
   readonly references: readonly SemanticReferenceViewModel[];
   readonly title: string;
-  readonly onSelectTarget: (reference: SemanticReferenceViewModel, role: RelationshipNavigationRole) => void;
+  readonly onSelectTarget: (reference: SemanticReferenceViewModel, side: RelationshipNavigationSide) => void;
 }) {
   return (
     <section className="relationship-section" aria-label={title}>
@@ -1490,7 +1490,7 @@ function RelationshipReferenceList({
         <ul className="relationship-list">
           {references.map((reference, index) => (
             <RelationshipReferenceRow
-              navigationRole={navigationRole}
+              navigationSide={navigationSide}
               reference={reference}
               key={`${reference.source.scope}:${reference.source.identity}:${reference.fieldPath}:${reference.targetScope}:${reference.targetIdentity}:${index}`}
               onSelectTarget={onSelectTarget}
@@ -1505,15 +1505,17 @@ function RelationshipReferenceList({
 }
 
 function RelationshipReferenceRow({
-  navigationRole,
+  navigationSide,
   reference,
   onSelectTarget,
 }: {
-  readonly navigationRole: RelationshipNavigationRole;
+  readonly navigationSide: RelationshipNavigationSide;
   readonly reference: SemanticReferenceViewModel;
-  readonly onSelectTarget: (reference: SemanticReferenceViewModel, role: RelationshipNavigationRole) => void;
+  readonly onSelectTarget: (reference: SemanticReferenceViewModel, side: RelationshipNavigationSide) => void;
 }) {
   const targetFilePath = reference.target?.filePath;
+  const isNavigable = navigationSide === 'source' || (reference.resolved && reference.target !== undefined);
+  const navigationLabel = navigationSide === 'source' ? 'Navigate to source entity' : 'Navigate to target entity';
   const content = (
     <>
       <span className={`relationship-status relationship-status--${reference.resolved ? 'resolved' : 'unresolved'}`}>
@@ -1528,8 +1530,13 @@ function RelationshipReferenceRow({
 
   return (
     <li>
-      {reference.resolved ? (
-        <button className="relationship-row relationship-row--button" type="button" onClick={() => onSelectTarget(reference, navigationRole)}>
+      {isNavigable ? (
+        <button
+          aria-label={navigationLabel}
+          className="relationship-row relationship-row--button"
+          type="button"
+          onClick={() => onSelectTarget(reference, navigationSide)}
+        >
           {content}
         </button>
       ) : (

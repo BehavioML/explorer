@@ -23,7 +23,7 @@ export {
   groupUnresolvedReferencesByTarget,
 } from './relationships';
 export type {
-  RelationshipNavigationRole,
+  RelationshipNavigationSide,
   RelationshipNavigationTarget,
   SelectedEntityRelationshipsViewModel,
   SemanticReferenceEntity,

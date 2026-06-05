@@ -137,16 +137,19 @@ test('unresolved references are grouped by target', () => {
   ]);
 });
 
-test('resolved relationship target maps to path-derived entity selection', () => {
+test('outgoing reference navigation maps to the target entity', () => {
   const index = createPathDerivedEntityIndex(files);
-  const navigationTarget = createRelationshipNavigationTarget(index, referenceIndex.outgoingReferences[0]);
+  const navigationTarget = createRelationshipNavigationTarget(
+    index,
+    referenceIndex.outgoingReferences[0],
+    'target',
+  );
 
   assert.deepEqual(navigationTarget, {
     status: 'matched_entity',
     entityKey: { scope: 'capabilities', identity: 'order/validate' },
   });
 });
-
 
 test('incoming backlink navigation maps to the source referrer entity', () => {
   const index = createPathDerivedEntityIndex(files);
@@ -162,13 +165,78 @@ test('incoming backlink navigation maps to the source referrer entity', () => {
   });
 });
 
+test('unresolved reference does not navigate as a resolved target', () => {
+  const index = createPathDerivedEntityIndex(files);
+  const navigationTarget = createRelationshipNavigationTarget(
+    index,
+    referenceIndex.unresolvedReferences[0],
+    'target',
+  );
+
+  assert.deepEqual(navigationTarget, { status: 'unresolved_reference' });
+});
+
+test('source navigation works when the reference target is unresolved', () => {
+  const index = createPathDerivedEntityIndex(files);
+  const navigationTarget = createRelationshipNavigationTarget(
+    index,
+    referenceIndex.unresolvedReferences[0],
+    'source',
+  );
+
+  assert.deepEqual(navigationTarget, {
+    status: 'matched_entity',
+    entityKey: { scope: 'workflows', identity: 'order/process' },
+  });
+});
+
 test('missing relationship target is handled gracefully', () => {
-  const index = createPathDerivedEntityIndex(files.filter((file) => file.path !== 'capabilities/order/validate.yaml'));
-  const navigationTarget = createRelationshipNavigationTarget(index, referenceIndex.outgoingReferences[0]);
+  const index = createPathDerivedEntityIndex(files);
+  const reference = {
+    ...referenceIndex.outgoingReferences[0],
+    target: undefined,
+  };
+  const navigationTarget = createRelationshipNavigationTarget(index, reference, 'target');
+
+  assert.deepEqual(navigationTarget, { status: 'missing_target' });
+});
+
+test('missing relationship source is handled gracefully', () => {
+  const index = createPathDerivedEntityIndex(files);
+  const reference = {
+    ...referenceIndex.incomingReferences[0],
+    source: undefined,
+  } as unknown as SemanticReferenceViewModel;
+  const navigationTarget = createRelationshipNavigationTarget(index, reference, 'source');
+
+  assert.deepEqual(navigationTarget, { status: 'missing_source' });
+});
+
+test('unmatched relationship source is handled gracefully', () => {
+  const index = createPathDerivedEntityIndex(
+    files.filter((file) => file.path !== 'components/order_processor.yaml'),
+  );
+  const navigationTarget = createRelationshipNavigationTarget(
+    index,
+    referenceIndex.incomingReferences[1],
+    'source',
+  );
+
+  assert.deepEqual(navigationTarget, { status: 'unmatched_source' });
+});
+
+test('unmatched relationship target is handled gracefully', () => {
+  const index = createPathDerivedEntityIndex(
+    files.filter((file) => file.path !== 'capabilities/order/validate.yaml'),
+  );
+  const navigationTarget = createRelationshipNavigationTarget(
+    index,
+    referenceIndex.outgoingReferences[0],
+    'target',
+  );
 
   assert.deepEqual(navigationTarget, { status: 'unmatched_target' });
 });
-
 
 test('diagnostic relationship matching normalizes source file paths', () => {
   const index = createPathDerivedEntityIndex(files);

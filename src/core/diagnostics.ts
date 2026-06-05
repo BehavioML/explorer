@@ -1,3 +1,4 @@
+import type { SemanticReferenceIndexViewModel } from './relationships';
 import type {
   PathDerivedEntityIndex,
   PathDerivedEntityKey,
@@ -20,6 +21,7 @@ export interface ValidationResultViewModel {
   readonly diagnostics: readonly DiagnosticViewModel[];
   readonly summary?: unknown;
   readonly coverage?: unknown;
+  readonly referenceIndex?: SemanticReferenceIndexViewModel;
 }
 
 export type DiagnosticNavigationStatus =

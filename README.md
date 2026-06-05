@@ -6,7 +6,7 @@ read-only semantic navigation and review tool for BehavioML workspaces.
 The current implementation is a Vite + React + TypeScript workbench slice. It
 establishes application boundaries and supports uploaded archive validation, a
 path-based workspace overview, a scope-oriented entity explorer, diagnostic
-navigation, local search, workspace tabs, built-in canonical example loading, and
+navigation, local search, Validator-backed relationships/backlinks, workspace tabs, built-in canonical example loading, and
 a raw read-only selected-entity source view without implementing Explorer-owned
 BehavioML semantics.
 
@@ -17,7 +17,7 @@ Implemented in this first vertical slice:
 - Vite + React + TypeScript application shell.
 - Framework-independent `src/core/` types for workspace files, archive extraction
   results, workspace root detection results, load/validation status, validation
-  view models, path-based workspace overview models, path-derived entity index
+  view models, Validator-backed relationship view models, path-based workspace overview models, path-derived entity index
   and selection helpers, raw source file view models, application errors, and
   command/port boundaries.
 - Browser-only uploaded `.tgz`, `.tar.gz`, and `.zip` archive extraction plus
@@ -34,7 +34,8 @@ Implemented in this first vertical slice:
   inspector, and bottom diagnostics panel.
 - Default workspace tabs for Overview, Source, and a Diagram placeholder. The
   Source tab reuses the raw read-only source viewer; the Diagram tab reserves the
-  future diagram surface without rendering or generating diagrams.
+  future diagram surface without rendering or generating diagrams. The Relationships
+  activity panel shows Validator-backed references and backlinks for the selected entity.
 - Archive selection, loading state, workspace overview, grouped path-derived
   entity browsing, selected entity summaries, local text/path search, selected-file
   diagnostics, validation status, diagnostic counts, diagnostic details, exact-path
@@ -85,9 +86,7 @@ The workbench shell contains:
   state, severity summaries, and clickable diagnostics when exact path-based
   navigation is available.
 
-Diagram rendering remains future work. Explorer does not generate diagrams, infer
-relationships, resolve references, compute backlinks, edit models, or parse YAML
-semantically in this UI slice.
+Diagram rendering remains future work, and document-style tabs remain deferred. Explorer does not generate diagrams, edit models, parse YAML semantically, or infer references from raw source text. Relationships and backlinks shown by Explorer come from Validator output rather than Explorer-owned reference-resolution semantics.
 
 For comparison or troubleshooting, the previous stacked layout remains available
 with `?layout=classic`.
@@ -215,9 +214,8 @@ artifacts, supporting artifacts, or model semantics.
 The BehavioML Validator remains the authority for parsing, model loading,
 reference resolution, validation rules, diagnostics semantics, summaries, and
 coverage. Explorer supports local text/path search over already extracted
-workspace files and path-derived entity metadata, but semantic search, reference
-resolution, backlinks, generated artifact discovery, supporting artifact
-discovery, diagram rendering, editing, and semantic entity metadata remain
+workspace files and path-derived entity metadata. Reference/backlink display is limited to Validator's structured semantic reference index; semantic search, generated artifact discovery, supporting artifact
+discovery, diagram rendering, editing, document-style tabs, and semantic entity metadata remain
 deferred.
 
 ## Entity browser skeleton
@@ -236,10 +234,22 @@ identity `connection/send_initial`. The entity browser recognizes `.yaml`,
 directories plus non-model files.
 
 These identities are non-authoritative beyond the current workspace file
-structure. Explorer does not parse YAML or JSON contents for entity fields,
-references, backlinks, generated artifacts, supporting artifacts, diagrams, or
-semantic metadata. If Explorer needs semantic entity metadata later, that data
+structure. Explorer does not parse YAML or JSON contents for entity fields, generated artifacts, supporting artifacts, diagrams, or
+semantic metadata. Relationship/backlink data comes from Validator's semantic reference index. If Explorer needs more semantic entity metadata later, that data
 should come from Validator API output rather than an Explorer-owned parser.
+
+
+## Relationships and backlinks
+
+The Relationships activity panel is backed by Validator's structured semantic reference index. For the selected path-derived entity, Explorer displays:
+
+- outgoing references,
+- incoming references/backlinks,
+- unresolved references involving the selected entity, and
+- unresolved references grouped by target scope and identity.
+
+Each row shows the source entity, Validator field path, target scope/identity, resolved/unresolved status, and target file when Validator provides one. Clicking a resolved target selects the matching path-derived entity if that entity exists in the loaded workspace. Missing path-derived targets are handled as non-navigable rather than guessed. Explorer does not parse YAML, scan raw text, or reimplement reference-resolution rules to populate this panel.
+
 
 ## Local search
 
@@ -278,14 +288,12 @@ when one exists, keeps the matching source file focused, and displays the
 selected diagnostic context near the source panel.
 
 Diagnostic matching is exact-path based only. Explorer does not parse YAML or
-JSON contents and does not interpret Validator field paths semantically. Field
-paths are displayed as opaque Validator output, alongside severity, message, and
-file path. If a diagnostic file path is not part of the path-derived entity
+JSON contents and does not change Validator diagnostic semantics. Field paths are displayed as opaque Validator output, alongside severity, message, file path, and relationship context when an unresolved Validator reference for the selected entity shares the same field path. If a diagnostic file path is not part of the path-derived entity
 index, Explorer keeps the current entity selection and reports that no matching
 entity was found.
 
-Source line highlighting, semantic field navigation, reference resolution, and
-backlinks remain deferred. Explorer does not invent line numbers from Validator
+Source line highlighting, semantic field navigation into exact YAML fields, and
+document-style diagnostic tabs remain deferred. Explorer does not invent line numbers from Validator
 field paths, and local search line numbers come only from raw source text
 matches.
 

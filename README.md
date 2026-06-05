@@ -6,9 +6,9 @@ read-only semantic navigation and review tool for BehavioML workspaces.
 The current implementation is a Vite + React + TypeScript workbench slice. It
 establishes application boundaries and supports uploaded archive validation, a
 path-based workspace overview, a scope-oriented entity explorer, diagnostic
-navigation, local search, workspace tabs, and a raw read-only selected-entity
-source view without implementing remote fetching or Explorer-owned BehavioML
-semantics.
+navigation, local search, workspace tabs, built-in canonical example loading, and
+a raw read-only selected-entity source view without implementing Explorer-owned
+BehavioML semantics.
 
 ## Current status
 
@@ -20,8 +20,8 @@ Implemented in this first vertical slice:
   view models, path-based workspace overview models, path-derived entity index
   and selection helpers, raw source file view models, application errors, and
   command/port boundaries.
-- Browser-only uploaded `.tgz`, `.tar.gz`, and `.zip` archive extraction under
-  `src/adapters/browser/`.
+- Browser-only uploaded `.tgz`, `.tar.gz`, and `.zip` archive extraction plus
+  canonical example ZIP loading under `src/adapters/browser/`.
 - Minimal workspace root detection for model roots at the archive root, under
   `behavioml/` or `behavioml/model/`, under feature-local
   `specs/<feature>/behavioml-draft/model/` drafts, or under the same layouts
@@ -45,7 +45,7 @@ Implemented in this first vertical slice:
 
 Deferred intentionally:
 
-- Remote archive URL fetching/loading.
+- General-purpose remote archive URL fetching/loading.
 - Full semantic entity navigation.
 - Line highlighting and semantic field navigation for diagnostics.
 - Semantic search, reference resolution, and backlinks.
@@ -65,8 +65,8 @@ selection context remain visible while users explore a loaded workspace.
 The workbench shell contains:
 
 - A compact top bar with the BehavioML Explorer identity, loaded model root or
-  load state, validation health, global search entry point, and archive load
-  action.
+  load state, validation health, global search entry point, archive load action,
+  and built-in example loader.
 - A narrow activity bar reserving major work modes: Explorer, Search, Validation,
   Diagrams, and Relationships. Explorer is the primary functional mode in this
   slice; the other modes either expose already-available search/validation context
@@ -92,6 +92,36 @@ semantically in this UI slice.
 For comparison or troubleshooting, the previous stacked layout remains available
 with `?layout=classic`.
 
+
+## Loading built-in examples
+
+Explorer includes a compact **Load example** control beside the archive loader.
+Choose **QUIC**, **OAuth Authorization Code**, or **WHIP**, then select **Load
+example**. Explorer fetches the current GitHub ZIP for
+[`BehavioML/specifications`](https://github.com/BehavioML/specifications) from:
+
+```text
+https://github.com/BehavioML/specifications/archive/refs/heads/main.zip
+```
+
+The browser adapter extracts the ZIP in memory and selects only the requested
+canonical model subtree:
+
+```text
+specifications-main/examples/quic/model/
+specifications-main/examples/oauth-authorization-code/model/
+specifications-main/examples/whip/model/
+```
+
+Paths are preserved relative to the selected example model root before the same
+validation, path-derived entity indexing, overview, source view, diagnostics, and
+search pipeline used by uploaded archives runs. The source label identifies the
+canonical upstream path, such as `BehavioML/specifications/examples/quic`.
+
+The canonical source remains `BehavioML/specifications`. Explorer does **not**
+vendor, copy, or duplicate those examples into this repository, and the example
+loader does not add Explorer-owned BehavioML parsing or semantics. It is an
+onboarding/loading convenience; caching and offline mode remain out of scope.
 
 ## Uploaded archive support
 
@@ -160,18 +190,19 @@ Archive extraction uses [`fflate`](https://www.npmjs.com/package/fflate) for
 gzip decompression and ZIP extraction. It was selected because it is small,
 browser-compatible, and focused on compression/decompression. Explorer keeps tar
 entry reading and ZIP extraction local to the browser adapter so no extraction
-behavior leaks into `src/core/` or the Validator adapter. Remote archive URL
-loading remains deferred. The build also aliases the Validator package's Node
-filesystem dependency to a browser-only unavailable-filesystem shim; Explorer
+behavior leaks into `src/core/` or the Validator adapter. General-purpose remote
+archive URL loading remains deferred; the only built-in network loader is the
+canonical BehavioML/specifications example ZIP path described above. The build
+also aliases the Validator package's Node filesystem dependency to a browser-only unavailable-filesystem shim; Explorer
 uses the Validator through its in-memory workspace path and does not ask the
 browser to read local filesystem paths.
 
 
 ## Workspace overview
 
-After a supported uploaded archive is extracted and a model root is detected,
-Explorer shows a workspace overview for the in-memory validation workspace. The
-overview includes the source label, detected model root, validation file count,
+After a supported uploaded archive or built-in example is extracted and a model
+root is detected, Explorer shows a workspace overview for the in-memory
+validation workspace. The overview includes the source label, detected model root, validation file count,
 known BehavioML scope counts, validation status, and a diagnostic summary.
 
 Scope counts are intentionally path-based and non-authoritative: Explorer counts

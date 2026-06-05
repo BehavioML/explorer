@@ -24,7 +24,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -180,6 +181,60 @@ code {
   inset: 0;
   opacity: 0;
   cursor: pointer;
+}
+
+.top-load-actions,
+.classic-load-actions {
+  display: inline-flex;
+  gap: 0.45rem;
+  align-items: center;
+  min-width: 0;
+}
+
+.classic-load-actions {
+  flex-wrap: wrap;
+}
+
+.example-loader {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+  min-width: 0;
+}
+
+.example-loader select {
+  max-width: 11rem;
+  min-width: 7.5rem;
+  padding: 0.42rem 0.55rem;
+  border: 1px solid #33405a;
+  border-radius: 0.45rem;
+  color: #d6deef;
+  background: #0f1420;
+}
+
+.example-loader button {
+  padding: 0.45rem 0.7rem;
+  border: 1px solid #44639c;
+  border-radius: 0.45rem;
+  color: #ffffff;
+  background: #244a8f;
+  font-size: 0.84rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.example-loader select:disabled,
+.example-loader button:disabled {
+  color: #8c9bb8;
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.example-loader select:focus,
+.example-loader button:focus-visible {
+  border-color: #7aa2ff;
+  outline: none;
 }
 
 .workbench-body {

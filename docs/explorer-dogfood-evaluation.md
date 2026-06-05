@@ -4,7 +4,11 @@ Date: 2026-06-05
 
 ## Scope and method
 
-This evaluation intentionally does **not** implement features. It dogfoods the current Explorer slice and the Explorer BehavioML model to identify product and architecture friction before proposing new Explorer functionality.
+This evaluation originally dogfooded the Explorer slice and the Explorer
+BehavioML model to identify product and architecture friction before proposing
+new Explorer functionality. The built-in example loader added after this
+evaluation partially addresses the onboarding blocker below by loading canonical
+examples directly from `BehavioML/specifications` without vendoring them.
 
 Requested targets:
 
@@ -38,7 +42,14 @@ npx tsx tmp-evaluate-core.ts
 
 ## Observed Explorer baseline
 
-The current implementation is accurately framed as a first vertical slice: archive upload, root detection, validation, path-based overview, scope-oriented entity browsing, path/text search, diagnostics, workspace tabs, and raw read-only source viewing are implemented; remote fetch, semantic navigation, line highlighting, semantic field navigation, reference/backlink resolution, generated/supporting artifact discovery, diagram rendering, editing, and Explorer-owned BehavioML semantics are intentionally deferred.
+The current implementation is accurately framed as a first vertical slice:
+archive upload, root detection, validation, path-based overview, scope-oriented
+entity browsing, path/text search, diagnostics, workspace tabs, and raw
+read-only source viewing are implemented; general-purpose remote archive loading,
+semantic navigation, line highlighting, semantic field navigation,
+reference/backlink resolution, generated/supporting artifact discovery, diagram
+rendering, editing, and Explorer-owned BehavioML semantics are intentionally
+deferred.
 
 Loading the Explorer model itself produced:
 
@@ -51,21 +62,25 @@ The repository-level `behavioml/` package was rejected with `workspace_root_not_
 
 ## P1 findings
 
-### P1.1 Requested example workspaces are not available or discoverable
+### P1.1 Requested example workspaces are now loadable from their canonical source
 
-The highest-priority blocker is not a UI control but the absence of the requested dogfood targets. `examples/quic`, `examples/oauth-authorization-code`, and `examples/whip` are not in this checkout, so a user cannot reproduce the intended Explorer evaluation without out-of-band knowledge of where those examples live.
+The original highest-priority blocker was the absence of the requested dogfood
+targets in this checkout. `examples/quic`, `examples/oauth-authorization-code`,
+and `examples/whip` are still not copied into this repository, but Explorer now
+provides a built-in loader that fetches them from the canonical
+`BehavioML/specifications` repository ZIP and selects the requested
+`examples/<name>/model/` subtree in memory.
 
 Impact:
 
-- Explorer quality cannot be validated against realistic protocol-sized models from this repository alone.
-- Future feature proposals risk being biased toward the Explorer model, which is meta-model-shaped and may not expose the same navigation needs as QUIC/OAuth/WHIP domain models.
-- The repository currently has no committed fixture or documented archive-production workflow for canonical examples.
+- Explorer quality can now be evaluated against realistic protocol-sized models from the UI when network access to GitHub is available.
+- The examples remain canonical upstream assets rather than Explorer-owned fixtures, so local/offline dogfooding still requires an uploaded archive or future mocked fixture path.
+- Future feature proposals can use QUIC/OAuth/WHIP domain models without committing those models into Explorer.
 
 Missing information:
 
-- Where canonical BehavioML example models are hosted.
-- Whether examples should be loaded as directories, local archives, GitHub ZIPs, or remote archive URLs.
-- Expected validation health for each example.
+- Expected validation health for each example over time as `BehavioML/specifications` evolves.
+- Whether a future manifest or release artifact should replace direct main-branch ZIP loading.
 - Expected user questions for each example, such as “find the token exchange step” or “trace QUIC handshake paths.”
 
 ### P1.2 The Explorer model exposes validation diagnostics that require source/YAML inspection to understand
@@ -229,7 +244,7 @@ The evaluation points to a staged roadmap. The ordering matters: semantic naviga
 
 ### Recommended P1 functionality
 
-1. **Commit canonical example fixtures or documented fixture sources.** Add or document `examples/quic`, `examples/oauth-authorization-code`, and `examples/whip`, including expected archive commands and validation health. This should happen before adding more UI features.
+1. **Keep canonical example loading stable and documented.** The UI now loads `examples/quic`, `examples/oauth-authorization-code`, and `examples/whip` from `BehavioML/specifications`; future work should add mocked smoke fixtures or a manifest/release artifact only if needed, without vendoring canonical examples into Explorer.
 2. **Add a loaded-workspace smoke fixture and test.** Keep it small, committed, and representative enough to exercise archive upload, overview, entity selection, source viewing, diagnostics, search, and tab/context behavior.
 3. **Expose semantic references/backlinks through Validator-backed data.** Do not parse YAML in Explorer. Add a boundary that can provide outgoing references, incoming references, and unresolved-reference diagnostics with target/source metadata.
 4. **Navigate diagnostics to exact source locations.** Use Validator-provided source locations when available; otherwise show field-path breadcrumbs and local source search hints without pretending to know YAML AST semantics.

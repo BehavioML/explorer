@@ -126,7 +126,7 @@ function createExtractedArchiveWorkspace(
   };
 }
 
-function extractRegularTextFilesFromZip(zipBytes: Uint8Array): WorkspaceFileEntry[] {
+export function extractRegularTextFilesFromZip(zipBytes: Uint8Array): WorkspaceFileEntry[] {
   const files: WorkspaceFileEntry[] = [];
   const decoder = new TextDecoder('utf-8', { fatal: true });
   const entries = unzipSync(zipBytes);

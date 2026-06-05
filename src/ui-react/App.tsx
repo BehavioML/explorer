@@ -1,5 +1,10 @@
 import { useMemo, useState } from 'react';
-import { extractUploadedArchive } from '../adapters/browser';
+import {
+  canonicalExampleDefinitions,
+  extractUploadedArchive,
+  loadCanonicalExampleWorkspace,
+  type CanonicalExampleId,
+} from '../adapters/browser';
 import { validateInMemoryModelWorkspace } from '../adapters/validator';
 import {
   BEHAVIOML_MODEL_SCOPE_DIRECTORIES,
@@ -67,6 +72,32 @@ export function App() {
       return;
     }
 
+    await loadWorkspace(
+      `Extracting ${file.name} in the browser...`,
+      () => extractUploadedArchive({ kind: 'uploaded_archive', file }),
+      'Unknown archive loading error.',
+    );
+  }
+
+  async function handleExampleSelected(exampleId: CanonicalExampleId) {
+    const example = canonicalExampleDefinitions.find((definition) => definition.id === exampleId);
+
+    await loadWorkspace(
+      `Fetching ${example?.label ?? exampleId} from BehavioML/specifications...`,
+      () => loadCanonicalExampleWorkspace(exampleId),
+      'Unknown example loading error.',
+    );
+  }
+
+  async function loadWorkspace(
+    loadingMessage: string,
+    extractWorkspace: () => Promise<{
+      readonly files: readonly WorkspaceFileEntry[];
+      readonly sourceLabel: string;
+      readonly modelRoot: string;
+    }>,
+    unknownErrorMessage: string,
+  ) {
     setWorkspaceOverview(undefined);
     setWorkspaceFiles([]);
     setEntityIndex(undefined);
@@ -76,10 +107,10 @@ export function App() {
     setSearchText('');
     setActiveActivity('explorer');
     setActiveTab('overview');
-    setStatus({ kind: 'loading', message: `Extracting ${file.name} in the browser...` });
+    setStatus({ kind: 'loading', message: loadingMessage });
 
     try {
-      const workspace = await extractUploadedArchive({ kind: 'uploaded_archive', file });
+      const workspace = await extractWorkspace();
       setWorkspaceFiles(workspace.files);
       const nextEntityIndex = createPathDerivedEntityIndex(workspace.files);
       setEntityIndex(nextEntityIndex);
@@ -131,7 +162,7 @@ export function App() {
     } catch (error) {
       setStatus({
         kind: 'error',
-        message: error instanceof Error ? error.message : 'Unknown archive loading error.',
+        message: error instanceof Error ? error.message : unknownErrorMessage,
       });
     }
   }
@@ -210,6 +241,7 @@ export function App() {
         workspaceFiles={workspaceFiles}
         workspaceOverview={workspaceOverview}
         onArchiveSelected={handleArchiveSelected}
+        onExampleSelected={handleExampleSelected}
         onDiagnosticSelected={handleDiagnosticSelected}
         onEntitySelected={handleEntitySelected}
         onSearchQueryChanged={handleSearchQueryChanged}
@@ -226,6 +258,7 @@ export function App() {
         validation={validation}
         workspaceOverview={workspaceOverview}
         onArchiveSelected={handleArchiveSelected}
+        onExampleSelected={handleExampleSelected}
         onSearchChange={handleSearchQueryChanged}
       />
 
@@ -283,6 +316,7 @@ function TopBar({
   validation,
   workspaceOverview,
   onArchiveSelected,
+  onExampleSelected,
   onSearchChange,
 }: {
   readonly searchText: string;
@@ -290,6 +324,7 @@ function TopBar({
   readonly validation: ValidationResultViewModel | undefined;
   readonly workspaceOverview: WorkspaceOverviewViewModel | undefined;
   readonly onArchiveSelected: (file: File | undefined) => void;
+  readonly onExampleSelected: (exampleId: CanonicalExampleId) => void;
   readonly onSearchChange: (query: string) => void;
 }) {
   return (
@@ -320,16 +355,60 @@ function TopBar({
         />
       </label>
 
-      <label className="top-load-button">
-        <span>{status.kind === 'loading' ? 'Loading...' : 'Load archive'}</span>
-        <input
-          type="file"
-          accept=".tgz,.tar.gz,.zip,application/gzip,application/zip"
-          disabled={status.kind === 'loading'}
-          onChange={(event) => void onArchiveSelected(event.currentTarget.files?.[0])}
-        />
-      </label>
+      <div className="top-load-actions" aria-label="Workspace load actions">
+        <label className="top-load-button">
+          <span>{status.kind === 'loading' ? 'Loading...' : 'Load archive'}</span>
+          <input
+            type="file"
+            accept=".tgz,.tar.gz,.zip,application/gzip,application/zip"
+            disabled={status.kind === 'loading'}
+            onChange={(event) => void onArchiveSelected(event.currentTarget.files?.[0])}
+          />
+        </label>
+        <ExampleLoader disabled={status.kind === 'loading'} onExampleSelected={onExampleSelected} />
+      </div>
     </header>
+  );
+}
+
+function ExampleLoader({
+  disabled,
+  onExampleSelected,
+}: {
+  readonly disabled: boolean;
+  readonly onExampleSelected: (exampleId: CanonicalExampleId) => void;
+}) {
+  const [selectedExampleId, setSelectedExampleId] = useState<CanonicalExampleId>(
+    canonicalExampleDefinitions[0].id,
+  );
+
+  return (
+    <form
+      className="example-loader"
+      aria-label="Load built-in BehavioML example"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onExampleSelected(selectedExampleId);
+      }}
+    >
+      <label>
+        <span className="visually-hidden">Built-in example</span>
+        <select
+          value={selectedExampleId}
+          disabled={disabled}
+          onChange={(event) => setSelectedExampleId(event.currentTarget.value as CanonicalExampleId)}
+        >
+          {canonicalExampleDefinitions.map((example) => (
+            <option value={example.id} key={example.id}>
+              {example.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button type="submit" disabled={disabled}>
+        Load example
+      </button>
+    </form>
   );
 }
 
@@ -724,6 +803,7 @@ function ClassicLayout({
   validation,
   workspaceOverview,
   onArchiveSelected,
+  onExampleSelected,
   onDiagnosticSelected,
   onEntitySelected,
   onSearchQueryChanged,
@@ -743,6 +823,7 @@ function ClassicLayout({
   readonly workspaceFiles: readonly WorkspaceFileEntry[];
   readonly workspaceOverview: WorkspaceOverviewViewModel | undefined;
   readonly onArchiveSelected: (file: File | undefined) => void;
+  readonly onExampleSelected: (exampleId: CanonicalExampleId) => void;
   readonly onDiagnosticSelected: (diagnostic: DiagnosticViewModel) => void;
   readonly onEntitySelected: (selection: PathDerivedEntitySelection) => void;
   readonly onSearchQueryChanged: (query: string) => void;
@@ -770,15 +851,18 @@ function ClassicLayout({
           </p>
         </div>
 
-        <label className="upload-placeholder">
-          <span>Choose .tgz, .tar.gz, or .zip archive</span>
-          <input
-            type="file"
-            accept=".tgz,.tar.gz,.zip,application/gzip,application/zip"
-            disabled={status.kind === 'loading'}
-            onChange={(event) => void onArchiveSelected(event.currentTarget.files?.[0])}
-          />
-        </label>
+        <div className="classic-load-actions">
+          <label className="upload-placeholder">
+            <span>Choose .tgz, .tar.gz, or .zip archive</span>
+            <input
+              type="file"
+              accept=".tgz,.tar.gz,.zip,application/gzip,application/zip"
+              disabled={status.kind === 'loading'}
+              onChange={(event) => void onArchiveSelected(event.currentTarget.files?.[0])}
+            />
+          </label>
+          <ExampleLoader disabled={status.kind === 'loading'} onExampleSelected={onExampleSelected} />
+        </div>
       </section>
 
       {workspaceOverview ? <WorkspaceOverviewLegacy overview={workspaceOverview} /> : null}

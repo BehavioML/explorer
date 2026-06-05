@@ -18,7 +18,6 @@ import {
   createWorkspaceOverview,
   findDiagnosticsForEntity,
   findSelectedEntity,
-  getDefaultEntitySelection,
   searchWorkspace,
   type DiagnosticSelection,
   type DiagnosticViewModel,
@@ -35,6 +34,15 @@ import {
   type WorkspaceOverviewValidationStatus,
   type WorkspaceOverviewViewModel,
 } from '../core';
+import {
+  activateWorkspaceDocument,
+  createInitialWorkspaceDocumentState,
+  findActiveWorkspaceDocument,
+  openEntityWorkspaceDocument,
+  setActiveEntityWorkspaceDocumentView,
+  type EntityWorkspaceDocumentView,
+  type WorkspaceDocument,
+} from './workspaceDocuments';
 
 type Status =
   | { readonly kind: 'idle'; readonly message: string }
@@ -43,7 +51,6 @@ type Status =
   | { readonly kind: 'error'; readonly message: string };
 
 type ActivityMode = 'explorer' | 'search' | 'validation' | 'diagrams' | 'relationships';
-type WorkspaceTab = 'overview' | 'source' | 'diagram';
 
 const activityItems: readonly {
   readonly id: ActivityMode;
@@ -71,7 +78,7 @@ export function App() {
   const [selectedSearchResult, setSelectedSearchResult] = useState<SearchResult>();
   const [searchText, setSearchText] = useState('');
   const [activeActivity, setActiveActivity] = useState<ActivityMode>('explorer');
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>('overview');
+  const [workspaceDocumentState, setWorkspaceDocumentState] = useState(createInitialWorkspaceDocumentState);
 
   async function handleArchiveSelected(file: File | undefined) {
     if (!file) {
@@ -112,7 +119,7 @@ export function App() {
     setSelectedSearchResult(undefined);
     setSearchText('');
     setActiveActivity('explorer');
-    setActiveTab('overview');
+    setWorkspaceDocumentState(createInitialWorkspaceDocumentState());
     setStatus({ kind: 'loading', message: loadingMessage });
 
     try {
@@ -120,7 +127,7 @@ export function App() {
       setWorkspaceFiles(workspace.files);
       const nextEntityIndex = createPathDerivedEntityIndex(workspace.files);
       setEntityIndex(nextEntityIndex);
-      setSelectedEntity(getDefaultEntitySelection(nextEntityIndex));
+      setSelectedEntity(undefined);
       setWorkspaceOverview(
         createWorkspaceOverview({
           sourceLabel: workspace.sourceLabel,
@@ -129,7 +136,7 @@ export function App() {
           validationStatus: 'running',
         }),
       );
-      setActiveTab('overview');
+      setWorkspaceDocumentState(createInitialWorkspaceDocumentState());
       setStatus({
         kind: 'loading',
         message: `Validating ${workspace.files.length} extracted model file${workspace.files.length === 1 ? '' : 's'}...`,
@@ -174,7 +181,9 @@ export function App() {
   }
 
   const validation = status.kind === 'validated' ? status.validation : undefined;
-  const selected = entityIndex ? findSelectedEntity(entityIndex, selectedEntity) : undefined;
+  const activeDocument = findActiveWorkspaceDocument(workspaceDocumentState);
+  const activeEntitySelection = getActiveEntitySelection(activeDocument);
+  const selected = entityIndex ? findSelectedEntity(entityIndex, activeEntitySelection) : undefined;
   const sourceView = selected ? createSourceFileView(workspaceFiles, selected) : undefined;
   const selectedRelationships = createSelectedEntityRelationships(validation?.referenceIndex, selected);
   const selectedDiagnostics = selected
@@ -189,11 +198,15 @@ export function App() {
   );
 
   function handleEntitySelected(selection: PathDerivedEntitySelection) {
+    if (!selection) {
+      return;
+    }
+
     setSelectedEntity(selection);
     setSelectedDiagnostic(undefined);
     setSelectedSearchResult(undefined);
     setActiveActivity('explorer');
-    setActiveTab('source');
+    setWorkspaceDocumentState((state) => openEntityWorkspaceDocument(state, selection, 'source'));
   }
 
   function handleDiagnosticSelected(diagnostic: DiagnosticViewModel) {
@@ -206,8 +219,9 @@ export function App() {
     setSelectedSearchResult(undefined);
 
     if (navigationTarget.entityKey) {
-      setSelectedEntity(navigationTarget.entityKey);
-      setActiveTab('source');
+      const entityKey = navigationTarget.entityKey;
+      setSelectedEntity(entityKey);
+      setWorkspaceDocumentState((state) => openEntityWorkspaceDocument(state, entityKey, 'source'));
     }
   }
 
@@ -234,7 +248,7 @@ export function App() {
       setSelectedDiagnostic(undefined);
       setSelectedSearchResult(undefined);
       setActiveActivity('relationships');
-      setActiveTab('source');
+      setWorkspaceDocumentState((state) => openEntityWorkspaceDocument(state, navigationTarget.entityKey, 'source'));
     }
   }
 
@@ -243,9 +257,27 @@ export function App() {
     setSelectedDiagnostic(undefined);
 
     if (result.entityKey) {
-      setSelectedEntity(result.entityKey);
-      setActiveTab('source');
+      const entityKey = result.entityKey;
+      setSelectedEntity(entityKey);
+      setWorkspaceDocumentState((state) => openEntityWorkspaceDocument(state, entityKey, 'source'));
     }
+  }
+
+  function handleWorkspaceDocumentSelected(document: WorkspaceDocument) {
+    setWorkspaceDocumentState((state) => activateWorkspaceDocument(state, document.id));
+
+    if (document.kind === 'entity') {
+      setSelectedEntity({ scope: document.scope, identity: document.identity });
+      return;
+    }
+
+    setSelectedEntity(undefined);
+    setSelectedDiagnostic(undefined);
+    setSelectedSearchResult(undefined);
+  }
+
+  function handleEntityDocumentViewSelected(view: EntityWorkspaceDocumentView) {
+    setWorkspaceDocumentState((state) => setActiveEntityWorkspaceDocumentView(state, view));
   }
 
   const layout = new URLSearchParams(window.location.search).get('layout');
@@ -307,7 +339,8 @@ export function App() {
           onSelectEntity={handleEntitySelected}
         />
         <WorkspaceTabs
-          activeTab={activeTab}
+          activeDocument={activeDocument}
+          documents={workspaceDocumentState.documents}
           diagnostics={selectedDiagnostics}
           entity={selected}
           selectedDiagnostic={selectedDiagnostic}
@@ -315,8 +348,11 @@ export function App() {
           sourceView={sourceView}
           validation={validation}
           workspaceOverview={workspaceOverview}
+          relationships={selectedRelationships}
+          onRelationshipTargetSelected={handleRelationshipTargetSelected}
           onSelectActivity={setActiveActivity}
-          onSelectTab={setActiveTab}
+          onSelectDocument={handleWorkspaceDocumentSelected}
+          onSelectEntityView={handleEntityDocumentViewSelected}
         />
         <InspectorPanel
           entity={selected}
@@ -565,8 +601,9 @@ function ExplorerPanel({
 }
 
 function WorkspaceTabs({
-  activeTab,
+  activeDocument,
   diagnostics,
+  documents,
   entity,
   relationships,
   selectedDiagnostic,
@@ -574,55 +611,127 @@ function WorkspaceTabs({
   sourceView,
   validation,
   workspaceOverview,
+  onRelationshipTargetSelected,
   onSelectActivity,
-  onSelectTab,
+  onSelectDocument,
+  onSelectEntityView,
 }: {
-  readonly activeTab: WorkspaceTab;
+  readonly activeDocument: WorkspaceDocument;
   readonly diagnostics: readonly DiagnosticViewModel[];
+  readonly documents: readonly WorkspaceDocument[];
   readonly entity: PathDerivedModelEntity | undefined;
-  readonly relationships?: SelectedEntityRelationshipsViewModel | undefined;
+  readonly relationships: SelectedEntityRelationshipsViewModel | undefined;
   readonly selectedDiagnostic: DiagnosticSelection | undefined;
   readonly selectedSearchResult: SearchResult | undefined;
   readonly sourceView: SourceFileViewModel | undefined;
   readonly validation: ValidationResultViewModel | undefined;
   readonly workspaceOverview: WorkspaceOverviewViewModel | undefined;
+  readonly onRelationshipTargetSelected: (
+    reference: SemanticReferenceViewModel,
+    side: RelationshipNavigationSide,
+  ) => void;
   readonly onSelectActivity: (activity: ActivityMode) => void;
-  readonly onSelectTab: (tab: WorkspaceTab) => void;
+  readonly onSelectDocument: (document: WorkspaceDocument) => void;
+  readonly onSelectEntityView: (view: EntityWorkspaceDocumentView) => void;
 }) {
-  const tabs: readonly { readonly id: WorkspaceTab; readonly label: string }[] = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'source', label: entity ? `Source: ${entity.displayName}` : 'Source' },
-    { id: 'diagram', label: 'Diagram' },
-  ];
-
   return (
     <section className="workspace-area" aria-label="Workspace tabs and content">
-      <div className="workspace-tab-strip" role="tablist" aria-label="Workspace tabs">
-        {tabs.map((tab) => (
+      <div className="workspace-tab-strip" role="tablist" aria-label="Workspace documents">
+        {documents.map((document) => (
           <button
-            className={activeTab === tab.id ? 'workspace-tab workspace-tab--active' : 'workspace-tab'}
+            className={
+              activeDocument.id === document.id ? 'workspace-tab workspace-tab--active' : 'workspace-tab'
+            }
             type="button"
             role="tab"
-            aria-selected={activeTab === tab.id}
-            key={tab.id}
-            onClick={() => onSelectTab(tab.id)}
+            aria-selected={activeDocument.id === document.id}
+            title={formatWorkspaceDocumentTitle(document)}
+            key={document.id}
+            onClick={() => onSelectDocument(document)}
           >
-            {tab.label}
+            <span>{formatWorkspaceDocumentLabel(document, entity)}</span>
           </button>
         ))}
       </div>
 
       <div className="workspace-content">
-        {activeTab === 'overview' ? (
+        {activeDocument.kind === 'overview' ? (
           <WorkspaceOverviewPanel
             overview={workspaceOverview}
             validation={validation}
             onOpenDiagnostics={() => onSelectActivity('validation')}
             onOpenExplorer={() => onSelectActivity('explorer')}
-            onOpenDiagrams={() => onSelectTab('diagram')}
+            onOpenDiagrams={() => onSelectActivity('diagrams')}
           />
         ) : null}
-        {activeTab === 'source' ? (
+        {activeDocument.kind === 'entity' ? (
+          <EntityDocumentWorkspace
+            activeView={activeDocument.activeView}
+            diagnostics={diagnostics}
+            entity={entity}
+            relationships={relationships}
+            selectedDiagnostic={selectedDiagnostic}
+            selectedSearchResult={selectedSearchResult}
+            sourceView={sourceView}
+            onRelationshipTargetSelected={onRelationshipTargetSelected}
+            onSelectView={onSelectEntityView}
+          />
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function EntityDocumentWorkspace({
+  activeView,
+  diagnostics,
+  entity,
+  relationships,
+  selectedDiagnostic,
+  selectedSearchResult,
+  sourceView,
+  onRelationshipTargetSelected,
+  onSelectView,
+}: {
+  readonly activeView: EntityWorkspaceDocumentView;
+  readonly diagnostics: readonly DiagnosticViewModel[];
+  readonly entity: PathDerivedModelEntity | undefined;
+  readonly relationships: SelectedEntityRelationshipsViewModel | undefined;
+  readonly selectedDiagnostic: DiagnosticSelection | undefined;
+  readonly selectedSearchResult: SearchResult | undefined;
+  readonly sourceView: SourceFileViewModel | undefined;
+  readonly onRelationshipTargetSelected: (
+    reference: SemanticReferenceViewModel,
+    side: RelationshipNavigationSide,
+  ) => void;
+  readonly onSelectView: (view: EntityWorkspaceDocumentView) => void;
+}) {
+  const viewTabs: readonly { readonly id: EntityWorkspaceDocumentView; readonly label: string }[] = [
+    { id: 'source', label: 'Source' },
+    { id: 'relationships', label: 'Relationships' },
+    { id: 'diagram', label: 'Diagram' },
+  ];
+
+  return (
+    <div className="entity-document-workspace">
+      <div className="entity-view-tab-strip" role="tablist" aria-label="Entity document views">
+        {viewTabs.map((view) => (
+          <button
+            className={
+              activeView === view.id ? 'entity-view-tab entity-view-tab--active' : 'entity-view-tab'
+            }
+            type="button"
+            role="tab"
+            aria-selected={activeView === view.id}
+            key={view.id}
+            onClick={() => onSelectView(view.id)}
+          >
+            {view.label}
+          </button>
+        ))}
+      </div>
+      <div className="entity-document-content">
+        {activeView === 'source' ? (
           <SourcePanel
             diagnostics={diagnostics}
             entity={entity}
@@ -632,10 +741,51 @@ function WorkspaceTabs({
             sourceView={sourceView}
           />
         ) : null}
-        {activeTab === 'diagram' ? <DiagramPlaceholder entity={entity} /> : null}
+        {activeView === 'relationships' ? (
+          <RelationshipsPanel
+            relationships={relationships}
+            onSelectTarget={onRelationshipTargetSelected}
+          />
+        ) : null}
+        {activeView === 'diagram' ? <DiagramPlaceholder entity={entity} /> : null}
       </div>
-    </section>
+    </div>
   );
+}
+
+function formatWorkspaceDocumentLabel(
+  document: WorkspaceDocument,
+  activeEntity: PathDerivedModelEntity | undefined,
+): string {
+  if (document.kind === 'overview') {
+    return 'Overview';
+  }
+
+  if (
+    activeEntity &&
+    activeEntity.scope === document.scope &&
+    activeEntity.identity === document.identity
+  ) {
+    return activeEntity.displayName;
+  }
+
+  return document.identity.split('/').at(-1) ?? document.identity;
+}
+
+function formatWorkspaceDocumentTitle(document: WorkspaceDocument): string {
+  if (document.kind === 'overview') {
+    return 'Workspace overview';
+  }
+
+  return `${document.scope}:${document.identity}`;
+}
+
+function getActiveEntitySelection(document: WorkspaceDocument): PathDerivedEntitySelection {
+  if (document.kind !== 'entity') {
+    return undefined;
+  }
+
+  return { scope: document.scope, identity: document.identity };
 }
 
 function WorkspaceOverviewPanel({

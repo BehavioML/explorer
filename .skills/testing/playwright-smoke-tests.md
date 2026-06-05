@@ -124,6 +124,29 @@ If adding Playwright to CI:
 - upload screenshots/reports as artifacts on failure;
 - do not block non-UI work with flaky browser tests unless the smoke test is stable.
 
+
+## Browser Availability
+
+Browser smoke tests should prefer Playwright-managed Chromium in CI via:
+
+```bash
+npx playwright install --with-deps chromium
+```
+
+Restricted local or Codex-style environments may block that download. In those
+cases, use a preinstalled Chromium/Chrome binary by setting one of these
+environment variables before running the browser smoke command:
+
+```bash
+CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium npm run test:browser
+PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium npm run test:browser
+```
+
+If neither Playwright-managed Chromium nor a configured system browser is
+available, report that browser validation did not run. Do not claim browser smoke
+validation succeeded, and keep unit/type/build results separate from the browser
+availability failure.
+
 ## Reporting
 
 Report:

@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "test": "node --import tsx --test tests/*.test.mjs tests/*.test.ts",
-    "test:smoke": "playwright test"
+    "test:smoke": "playwright test",
+    "test:browser": "playwright test"
   },
   "dependencies": {
     "@behavioml/validator": "git+https://github.com/BehavioML/validator.git#be6814f169c0e46245394956fbe21548233b2797",

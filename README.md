@@ -341,6 +341,12 @@ Run the development server:
 npm run dev
 ```
 
+Serve the production build locally after `npm run build`:
+
+```sh
+npm run preview
+```
+
 Typecheck:
 
 ```sh
@@ -358,6 +364,31 @@ Run architecture boundary and workspace loading tests:
 ```sh
 npm test
 ```
+
+Run the Playwright browser smoke test:
+
+```sh
+npx playwright install --with-deps chromium
+npm run test:smoke
+```
+
+The smoke command builds the production Vite app and serves it with
+`npm run preview`, then opens the GitHub Pages base route at `/explorer/`. It
+checks that the empty Explorer workbench shell renders, including the top bar,
+activity bar, Explorer panel, workspace area, Inspector panel, and Diagnostics
+panel. It also fails on browser page errors and console errors observed during
+the smoke run.
+
+Playwright writes its HTML report to `playwright-report/` and per-test artifacts
+including screenshots and retained failure traces to `test-results/`. The smoke
+test always captures an empty-workbench screenshot in `test-results/`; CI uploads
+`playwright-report/` and `test-results/` when the browser smoke job fails.
+
+Limitations: this is intentionally a lightweight smoke test, not visual
+regression testing. It does not compare screenshots against baselines, does not
+upload archive fixtures, and does not validate archive extraction, root
+detection, Validator diagnostics semantics, entity indexing, diagrams,
+references, backlinks, or editing workflows.
 
 ## Workspace conventions
 

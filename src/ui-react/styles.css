@@ -1308,3 +1308,95 @@ body:has(.app-shell--classic) {
   margin: 0;
   font-size: 1rem;
 }
+
+.diagram-artifact-panel {
+  display: grid;
+  gap: 0.85rem;
+  min-height: clamp(22rem, 58vh, 48rem);
+  padding: 1rem;
+  overflow: auto;
+  border: 1px solid #2c3a55;
+  border-radius: 0.85rem;
+  background: #080c14;
+}
+
+.diagram-status {
+  margin: 0;
+  color: #d8e2f7;
+}
+
+.diagram-status--generated {
+  color: #9be7c0;
+}
+
+.diagram-status--generator_diagnostics,
+.diagram-status--unsupported_artifact,
+.diagram-status--empty_content,
+.diagram-status--artifact_not_found,
+.diagram-status--malformed_artifact,
+.diagram-status--adapter_error,
+.diagram-status--unsupported_entity {
+  color: #ffd68a;
+}
+
+.diagram-artifact-metadata {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.diagram-artifact-metadata div {
+  min-width: 0;
+  padding: 0.65rem;
+  border: 1px solid #263650;
+  border-radius: 0.65rem;
+  background: #101827;
+}
+
+.diagram-artifact-metadata dt {
+  color: #8ea2c7;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.diagram-artifact-metadata dd {
+  margin: 0.2rem 0 0;
+  overflow-wrap: anywhere;
+  color: #f4f7ff;
+}
+
+.diagram-diagnostics {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.75rem;
+  border: 1px solid #755f2a;
+  border-radius: 0.65rem;
+  background: rgb(80 54 12 / 42%);
+}
+
+.diagram-diagnostics h3,
+.diagram-diagnostics ul {
+  margin: 0;
+}
+
+.diagram-diagnostics ul {
+  display: grid;
+  gap: 0.3rem;
+  padding-left: 1.15rem;
+}
+
+.diagram-source {
+  margin: 0;
+  min-height: 14rem;
+  padding: 1rem;
+  overflow: auto;
+  border: 1px solid #263650;
+  border-radius: 0.65rem;
+  background: #050812;
+  color: #dce7ff;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  white-space: pre;
+}

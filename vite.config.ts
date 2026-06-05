@@ -14,6 +14,7 @@ export default defineConfig(({ command, mode }) => {
     plugins: [react()],
     resolve: {
       alias: {
+        'node:fs/promises': browserNodeFsShimPath,
         'node:fs': browserNodeFsShimPath,
         'node:path': 'path-browserify',
       },

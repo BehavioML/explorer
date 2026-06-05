@@ -76,3 +76,26 @@ test('Validator package imports remain isolated to the validator adapter', async
     'Only src/adapters/validator may reference @behavioml/validator',
   );
 });
+
+
+test('React UI does not import the BehavioML Generator directly', async () => {
+  const sources = await readSources('src/ui-react');
+
+  for (const { file, content } of sources) {
+    assert.doesNotMatch(content, /@behavioml\/generator/, `${file} must use adapter boundaries`);
+  }
+});
+
+test('Generator package imports remain isolated to the generator adapter', async () => {
+  const sources = await readSources('src');
+  const offenders = sources.filter(
+    ({ file, content }) =>
+      content.includes('@behavioml/generator') && !file.startsWith('src/adapters/generator/'),
+  );
+
+  assert.deepEqual(
+    offenders.map((offender) => offender.file),
+    [],
+    'Only src/adapters/generator may reference @behavioml/generator',
+  );
+});

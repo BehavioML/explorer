@@ -4,6 +4,17 @@ declare module '@behavioml/generator' {
     readonly content: string;
   }
 
+  export interface GeneratorArtifactSourceMapEntry {
+    readonly diagramId: string;
+    readonly role: string;
+    readonly entity: {
+      readonly scope: string;
+      readonly identity: string;
+    };
+    readonly fieldPath?: string;
+    readonly label?: string;
+  }
+
   export interface GenerateWorkspaceArtifactsOptions {
     readonly artifacts?: readonly string[];
     readonly formats?: readonly string[];

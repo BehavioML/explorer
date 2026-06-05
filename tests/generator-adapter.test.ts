@@ -44,6 +44,14 @@ test('adapter maps generator artifacts to Explorer diagram view models', () => {
     content: 'sequenceDiagram\n  participant Buyer\n',
     sourceEntity: { kind: 'workflow', id: 'checkout/place_order' },
     diagnostics: [{ severity: 'warning', message: 'example warning' }],
+    sourceMap: [
+      {
+        diagramId: 'workflow-checkout-place-order',
+        role: 'entity',
+        entity: { scope: 'workflows', identity: 'checkout/place_order' },
+        label: 'Place order',
+      },
+    ],
   });
 
   assert.deepEqual(artifact, {
@@ -54,6 +62,14 @@ test('adapter maps generator artifacts to Explorer diagram view models', () => {
     content: 'sequenceDiagram\n  participant Buyer\n',
     sourceEntity: { kind: 'workflow', id: 'checkout/place_order' },
     diagnostics: [{ severity: 'warning', message: 'example warning' }],
+    sourceMap: [
+      {
+        diagramId: 'workflow-checkout-place-order',
+        role: 'entity',
+        entity: { scope: 'workflows', identity: 'checkout/place_order' },
+        label: 'Place order',
+      },
+    ],
   });
 });
 
@@ -71,6 +87,14 @@ test('workflow entity requests a single workflow sequence artifact using the sel
             path: 'generated/workflows/checkout/place_order.mmd',
             content: 'sequenceDiagram\n  participant Buyer\n',
             sourceEntity: { kind: 'workflow', id: 'checkout/place_order' },
+            sourceMap: [
+              {
+                diagramId: 'workflow-checkout-place-order',
+                role: 'entity',
+                entity: { scope: 'workflows', identity: 'checkout/place_order' },
+                label: 'Place order',
+              },
+            ],
           },
         ];
       },
@@ -86,6 +110,14 @@ test('workflow entity requests a single workflow sequence artifact using the sel
   ]);
   assert.equal(diagram.status, 'generated');
   assert.equal(diagram.artifact?.content.startsWith('sequenceDiagram'), true);
+  assert.deepEqual(diagram.artifact?.sourceMap, [
+    {
+      diagramId: 'workflow-checkout-place-order',
+      role: 'entity',
+      entity: { scope: 'workflows', identity: 'checkout/place_order' },
+      label: 'Place order',
+    },
+  ]);
 });
 
 test('unsupported entity type returns an unsupported diagram status without calling generator', async () => {

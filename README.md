@@ -30,7 +30,10 @@ Implemented in this first vertical slice:
   Validator package isolated to that adapter.
 - Generator integration boundary under `src/adapters/generator/`, with
   `@behavioml/generator` isolated to that adapter and used as the source of
-  generated diagram artifacts.
+  generated Mermaid diagram artifacts and optional source-map metadata.
+- Mermaid browser rendering boundary under `src/adapters/mermaid/`, with the
+  official `mermaid` package isolated to that adapter and initialized with
+  strict security settings for user-provided workspaces.
 - React workbench UI under `src/ui-react/` with a compact top bar, left activity
   bar, scope-oriented explorer panel, tabbed central workspace, contextual
   inspector, and bottom diagnostics panel.
@@ -39,8 +42,9 @@ Implemented in this first vertical slice:
   open while users navigate and expose per-document Source, Relationships, and
   Diagram views. The Source view reuses the raw read-only source
   viewer; the Relationships view reuses Validator-backed references/backlinks;
-  the Diagram view lazily requests Generator-owned Mermaid artifacts and displays
-  the generated source read-only.
+  the Diagram view lazily requests Generator-owned Mermaid artifacts, renders
+  them to SVG in the browser, preserves source-map metadata, and keeps the
+  generated Mermaid source available as a fallback.
 - Archive selection, loading state, workspace overview, grouped path-derived
   entity browsing, selected entity summaries, local text/path search, selected-file
   diagnostics, validation status, diagnostic counts, diagnostic details, exact-path
@@ -58,8 +62,6 @@ Deferred intentionally:
 - Generated artifact discovery and supporting artifact discovery beyond the
   selected-entity Diagram view.
 - Editing.
-- Rendered diagram canvas support; the initial Generator integration displays
-  Mermaid source rather than adding a Mermaid rendering dependency.
 - Any Explorer-owned BehavioML parser, resolver, validator, or diagnostics
   semantics.
 
@@ -94,7 +96,7 @@ The workbench shell contains:
   state, severity summaries, and clickable diagnostics when exact path-based
   navigation is available.
 
-Explorer does not generate diagrams itself, edit models, parse YAML semantically, or infer references from raw source text. The selected-entity Diagram view consumes Generator-owned artifacts through `src/adapters/generator/` and currently displays Generator-produced Mermaid source in a read-only code block. Relationships and backlinks shown by Explorer come from Validator output rather than Explorer-owned reference-resolution semantics.
+Explorer does not generate diagrams itself, edit models, parse YAML semantically, or infer references from raw source text, Mermaid text, or rendered SVG structure. The selected-entity Diagram view consumes Generator-owned artifacts through `src/adapters/generator/`, renders Mermaid through `src/adapters/mermaid/`, and preserves Generator-provided source-map metadata for future click handling. Relationships and backlinks shown by Explorer come from Validator output rather than Explorer-owned reference-resolution semantics.
 
 For comparison or troubleshooting, the previous stacked layout remains available
 with `?layout=classic`.
@@ -258,19 +260,27 @@ for diagram semantics and does not manually assemble Mermaid.
 Current behavior:
 
 - Workflow entity tabs lazily request a single `workflow-sequence:<workflow-id>`
-  artifact for the selected workflow identity and display the returned Mermaid
-  source in a read-only code block.
+  artifact for the selected workflow identity, render the returned Mermaid source
+  to SVG in the browser, and keep the Mermaid source available as a fallback.
+- Mermaid rendering is owned by Explorer through `src/adapters/mermaid/`, uses the
+  official browser `mermaid` package, disables global auto-rendering, and runs
+  with `securityLevel: 'strict'` and HTML labels disabled before the UI injects
+  renderer-owned SVG into an isolated canvas component.
+- If Generator includes `sourceMap`, Explorer preserves that metadata alongside
+  the artifact/rendered diagram and exposes it in a collapsed metadata panel.
+  Explorer does not parse SVG ids or Mermaid text to discover model semantics.
 - State-machine entity tabs ask Generator for state-machine artifacts, but the
   current Generator SDK returns aggregate state-machine output rather than a
   per-state-machine artifact. Explorer therefore shows a clear Generator
   limitation message instead of parsing or splitting Mermaid itself.
 - Unsupported entity scopes keep a clear unsupported placeholder.
-- Generator diagnostics, empty artifact content, package/adapter failures, and
-  malformed artifacts are surfaced as Diagram-view messages.
+- Generator diagnostics, Mermaid render errors, empty artifact content,
+  package/adapter failures, and malformed artifacts are surfaced as Diagram-view
+  messages.
 
-A rendered Mermaid canvas remains future work for Explorer. This integration is
-intended to prove that Explorer consumes Generator-owned artifacts while keeping
-all Generator package imports isolated to `src/adapters/generator/`.
+Clickable diagram navigation is intentionally deferred. It should be implemented
+only from an explicit, stable Generator source-map contract and must not infer
+model references from Mermaid text, SVG element structure, or BehavioML YAML.
 
 
 ## Relationships and backlinks
@@ -374,8 +384,9 @@ The BehavioML Generator owns diagram artifact semantics. Explorer must not
 reimplement those semantics, parse BehavioML source for diagram meaning, or
 manually generate Mermaid. The adapter in `src/adapters/generator/` accepts
 workspace-relative in-memory file entries, calls `generateWorkspaceArtifacts`,
-and maps Generator output into Explorer diagram view models. Adapter failures are
-kept separate from Generator diagnostics so the UI can distinguish "the diagram
+and maps Generator output, including optional `sourceMap` entries, into Explorer
+diagram view models without interpreting source-map semantics. Adapter failures
+are kept separate from Generator diagnostics so the UI can distinguish "the diagram
 artifact has diagnostics" from "Generator could not run."
 
 ## Generator dependency status
@@ -386,15 +397,16 @@ available from npm. For local development and CI, Explorer consumes the Generato
 repository directly as a pinned Git dependency, mirroring the Validator strategy:
 
 ```json
-"@behavioml/generator": "git+https://github.com/BehavioML/generator.git#6db73edc5634baa35088d1afe78dc1f8b136ec50"
+"@behavioml/generator": "git+https://github.com/BehavioML/generator.git#bfecb030922691c2c4b0629b39e0d0e393cb03e1"
 ```
 
 The pinned commit is the `main` revision inspected for this integration. It
 exports `generateWorkspaceArtifacts`, `generateModelArtifacts`, and
 `loadWorkspaceModel` from `src/index.js`, accepts already-loaded in-memory
 workspace files, performs no filesystem IO, and supports Mermaid artifact
-requests such as `workflow-sequence:<workflow-id>`. Updating this pin should be a
-deliberate dependency-integration change.
+requests such as `workflow-sequence:<workflow-id>`. This commit also includes
+source-map metadata on diagram artifacts. Updating this pin should be a deliberate
+dependency-integration change.
 
 The import remains deferred inside `src/adapters/generator/` so the React app and
 core layers continue to avoid direct Generator coupling. This dependency should

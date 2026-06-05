@@ -16,7 +16,7 @@ test('renders the Explorer workbench shell', async ({ page }, testInfo) => {
   await page.goto('/explorer/');
 
   await expect(page.getByRole('main', { name: 'BehavioML Explorer workbench' })).toBeVisible();
-  await expect(page.getByRole('banner')).toBeVisible();
+  await expect(page.getByLabel('Application identity')).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Workbench activity bar' })).toBeVisible();
   await expect(page.getByRole('complementary', { name: 'Explorer panel' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Workspace tabs and content' })).toBeVisible();

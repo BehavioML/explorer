@@ -6,7 +6,7 @@ read-only semantic navigation and review tool for BehavioML workspaces.
 The current implementation is a Vite + React + TypeScript workbench slice. It
 establishes application boundaries and supports uploaded archive validation, a
 path-based workspace overview, a scope-oriented entity explorer, diagnostic
-navigation, local search, Validator-backed relationships/backlinks, workspace tabs, built-in canonical example loading, and
+navigation, local search, Validator-backed relationships/backlinks, document-style workspace tabs, built-in canonical example loading, and
 a raw read-only selected-entity source view without implementing Explorer-owned
 BehavioML semantics.
 
@@ -32,10 +32,13 @@ Implemented in this first vertical slice:
 - React workbench UI under `src/ui-react/` with a compact top bar, left activity
   bar, scope-oriented explorer panel, tabbed central workspace, contextual
   inspector, and bottom diagnostics panel.
-- Default workspace tabs for Overview, Source, and a Diagram placeholder. The
-  Source tab reuses the raw read-only source viewer; the Diagram tab reserves the
-  future diagram surface without rendering or generating diagrams. The Relationships
-  activity panel shows Validator-backed references and backlinks for the selected entity.
+- Document-style workspace tabs with Overview as the always-available first
+  workspace document and one tab per opened path-derived entity. Entity tabs stay
+  open while users navigate and expose per-document Source, Relationships, and
+  Diagram-placeholder views. The Source view reuses the raw read-only source
+  viewer; the Relationships view reuses Validator-backed references/backlinks;
+  the Diagram view reserves the future diagram surface without rendering or
+  generating diagrams.
 - Archive selection, loading state, workspace overview, grouped path-derived
   entity browsing, selected entity summaries, local text/path search, selected-file
   diagnostics, validation status, diagnostic counts, diagnostic details, exact-path
@@ -74,11 +77,13 @@ The workbench shell contains:
   or intentional placeholders for future work.
 - A scope-oriented Explorer panel that groups path-derived entities under known
   BehavioML model scopes and shows counts for each scope.
-- A tabbed central workspace with Overview, Source, and Diagram tabs. The
-  Overview tab opens after a successful load and summarizes workspace identity,
-  detected root, scope counts, validation health, and entry points. The Source
-  tab shows the existing raw read-only source viewer for the selected entity. The
-  Diagram tab is a placeholder only.
+- A tabbed central workspace with document-style tabs. Overview is a normal
+  workspace document that opens automatically after loading and summarizes
+  workspace identity, detected root, scope counts, validation health, and entry
+  points. Selecting an entity from the explorer, search results, diagnostics, or
+  relationship/backlink navigation opens or activates a matching entity document
+  tab without duplicating existing tabs. Each entity document has compact Source,
+  Relationships, and Diagram-placeholder views.
 - A compact Inspector panel for selected entity identity, scope, file path,
   extension, selected diagnostic/search context, and diagnostics for the selected
   source file.
@@ -86,7 +91,7 @@ The workbench shell contains:
   state, severity summaries, and clickable diagnostics when exact path-based
   navigation is available.
 
-Diagram rendering remains future work, and document-style tabs remain deferred. Explorer does not generate diagrams, edit models, parse YAML semantically, or infer references from raw source text. Relationships and backlinks shown by Explorer come from Validator output rather than Explorer-owned reference-resolution semantics.
+Diagram rendering remains future work. Explorer does not generate diagrams, edit models, parse YAML semantically, or infer references from raw source text. Relationships and backlinks shown by Explorer come from Validator output rather than Explorer-owned reference-resolution semantics.
 
 For comparison or troubleshooting, the previous stacked layout remains available
 with `?layout=classic`.
@@ -215,7 +220,7 @@ The BehavioML Validator remains the authority for parsing, model loading,
 reference resolution, validation rules, diagnostics semantics, summaries, and
 coverage. Explorer supports local text/path search over already extracted
 workspace files and path-derived entity metadata. Reference/backlink display is limited to Validator's structured semantic reference index; semantic search, generated artifact discovery, supporting artifact
-discovery, diagram rendering, editing, document-style tabs, and semantic entity metadata remain
+discovery, diagram rendering, editing, and semantic entity metadata remain
 deferred.
 
 ## Entity browser skeleton

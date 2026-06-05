@@ -4,6 +4,7 @@ import {
   createPathDerivedEntityIndex,
   createRelationshipNavigationTarget,
   createSelectedEntityRelationships,
+  findUnresolvedReferencesForDiagnostic,
   groupUnresolvedReferencesByTarget,
   type SemanticReferenceIndexViewModel,
   type SemanticReferenceViewModel,
@@ -146,11 +147,42 @@ test('resolved relationship target maps to path-derived entity selection', () =>
   });
 });
 
+
+test('incoming backlink navigation maps to the source referrer entity', () => {
+  const index = createPathDerivedEntityIndex(files);
+  const navigationTarget = createRelationshipNavigationTarget(
+    index,
+    referenceIndex.incomingReferences[1],
+    'source',
+  );
+
+  assert.deepEqual(navigationTarget, {
+    status: 'matched_entity',
+    entityKey: { scope: 'components', identity: 'order_processor' },
+  });
+});
+
 test('missing relationship target is handled gracefully', () => {
   const index = createPathDerivedEntityIndex(files.filter((file) => file.path !== 'capabilities/order/validate.yaml'));
   const navigationTarget = createRelationshipNavigationTarget(index, referenceIndex.outgoingReferences[0]);
 
   assert.deepEqual(navigationTarget, { status: 'unmatched_target' });
+});
+
+
+test('diagnostic relationship matching normalizes source file paths', () => {
+  const index = createPathDerivedEntityIndex(files);
+  const selected = index.entities.find((entity) => entity.scope === 'workflows' && entity.identity === 'order/process');
+  const relationships = createSelectedEntityRelationships(referenceIndex, selected);
+  const relatedReferences = findUnresolvedReferencesForDiagnostic(
+    { filePath: 'workflows\\order\\process.yaml', fieldPath: 'steps[1]' },
+    relationships,
+  );
+
+  assert.deepEqual(
+    relatedReferences.map((reference) => `${reference.source.filePath}:${reference.fieldPath}`),
+    ['workflows/order/process.yaml:steps[1]'],
+  );
 });
 
 function resolvedReference(input: {

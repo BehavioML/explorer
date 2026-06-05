@@ -11,6 +11,7 @@ import {
   createDiagnosticNavigationTarget,
   createPathDerivedEntityIndex,
   createRelationshipNavigationTarget,
+  findUnresolvedReferencesForDiagnostic,
   createSelectedEntityRelationships,
   createSourceFileView,
   createValidatedWorkspaceOverview,
@@ -26,6 +27,7 @@ import {
   type PathDerivedModelEntity,
   type SearchResult,
   type SelectedEntityRelationshipsViewModel,
+  type RelationshipNavigationRole,
   type SemanticReferenceViewModel,
   type SourceFileViewModel,
   type ValidationResultViewModel,
@@ -217,12 +219,15 @@ export function App() {
     }
   }
 
-  function handleRelationshipTargetSelected(reference: SemanticReferenceViewModel) {
+  function handleRelationshipTargetSelected(
+    reference: SemanticReferenceViewModel,
+    role: RelationshipNavigationRole,
+  ) {
     if (!entityIndex) {
       return;
     }
 
-    const navigationTarget = createRelationshipNavigationTarget(entityIndex, reference);
+    const navigationTarget = createRelationshipNavigationTarget(entityIndex, reference, role);
 
     if (navigationTarget.status === 'matched_entity') {
       setSelectedEntity(navigationTarget.entityKey);
@@ -490,7 +495,10 @@ function ExplorerPanel({
   readonly selectedSearchResult: SearchResult | undefined;
   readonly validation: ValidationResultViewModel | undefined;
   readonly workspaceOverview: WorkspaceOverviewViewModel | undefined;
-  readonly onRelationshipTargetSelected: (reference: SemanticReferenceViewModel) => void;
+  readonly onRelationshipTargetSelected: (
+    reference: SemanticReferenceViewModel,
+    role: RelationshipNavigationRole,
+  ) => void;
   readonly onSearchQueryChanged: (query: string) => void;
   readonly onSearchResultSelected: (result: SearchResult) => void;
   readonly onSelectActivity: (activity: ActivityMode) => void;
@@ -1406,7 +1414,7 @@ function RelationshipsPanel({
   onSelectTarget,
 }: {
   readonly relationships: SelectedEntityRelationshipsViewModel | undefined;
-  readonly onSelectTarget: (reference: SemanticReferenceViewModel) => void;
+  readonly onSelectTarget: (reference: SemanticReferenceViewModel, role: RelationshipNavigationRole) => void;
 }) {
   if (!relationships) {
     return (
@@ -1428,18 +1436,21 @@ function RelationshipsPanel({
         title="Outgoing references"
         emptyMessage="No outgoing semantic references for this entity."
         references={relationships.outgoingReferences}
+        navigationRole="target"
         onSelectTarget={onSelectTarget}
       />
       <RelationshipReferenceList
         title="Incoming references / backlinks"
         emptyMessage="No incoming backlinks for this entity."
         references={relationships.incomingReferences}
+        navigationRole="source"
         onSelectTarget={onSelectTarget}
       />
       <RelationshipReferenceList
         title="Unresolved references involving this entity"
         emptyMessage="No unresolved references involving this entity."
         references={relationships.unresolvedReferences}
+        navigationRole="target"
         onSelectTarget={onSelectTarget}
       />
       {relationships.unresolvedReferencesByTarget.length > 0 ? (
@@ -1461,14 +1472,16 @@ function RelationshipsPanel({
 
 function RelationshipReferenceList({
   emptyMessage,
+  navigationRole,
   references,
   title,
   onSelectTarget,
 }: {
   readonly emptyMessage: string;
+  readonly navigationRole: RelationshipNavigationRole;
   readonly references: readonly SemanticReferenceViewModel[];
   readonly title: string;
-  readonly onSelectTarget: (reference: SemanticReferenceViewModel) => void;
+  readonly onSelectTarget: (reference: SemanticReferenceViewModel, role: RelationshipNavigationRole) => void;
 }) {
   return (
     <section className="relationship-section" aria-label={title}>
@@ -1477,6 +1490,7 @@ function RelationshipReferenceList({
         <ul className="relationship-list">
           {references.map((reference, index) => (
             <RelationshipReferenceRow
+              navigationRole={navigationRole}
               reference={reference}
               key={`${reference.source.scope}:${reference.source.identity}:${reference.fieldPath}:${reference.targetScope}:${reference.targetIdentity}:${index}`}
               onSelectTarget={onSelectTarget}
@@ -1491,11 +1505,13 @@ function RelationshipReferenceList({
 }
 
 function RelationshipReferenceRow({
+  navigationRole,
   reference,
   onSelectTarget,
 }: {
+  readonly navigationRole: RelationshipNavigationRole;
   readonly reference: SemanticReferenceViewModel;
-  readonly onSelectTarget: (reference: SemanticReferenceViewModel) => void;
+  readonly onSelectTarget: (reference: SemanticReferenceViewModel, role: RelationshipNavigationRole) => void;
 }) {
   const targetFilePath = reference.target?.filePath;
   const content = (
@@ -1513,7 +1529,7 @@ function RelationshipReferenceRow({
   return (
     <li>
       {reference.resolved ? (
-        <button className="relationship-row relationship-row--button" type="button" onClick={() => onSelectTarget(reference)}>
+        <button className="relationship-row relationship-row--button" type="button" onClick={() => onSelectTarget(reference, navigationRole)}>
           {content}
         </button>
       ) : (
@@ -1551,7 +1567,7 @@ function DiagnosticRelationshipContext({
   readonly diagnostic: DiagnosticViewModel;
   readonly relationships?: SelectedEntityRelationshipsViewModel | undefined;
 }) {
-  const relatedReferences = findDiagnosticRelationships(diagnostic, relationships);
+  const relatedReferences = findUnresolvedReferencesForDiagnostic(diagnostic, relationships);
 
   if (relatedReferences.length === 0) {
     return null;
@@ -1575,26 +1591,9 @@ function countDiagnosticRelationships(
   diagnostic: DiagnosticViewModel,
   relationships?: SelectedEntityRelationshipsViewModel | undefined,
 ): number {
-  return findDiagnosticRelationships(diagnostic, relationships).length;
+  return findUnresolvedReferencesForDiagnostic(diagnostic, relationships).length;
 }
 
-function findDiagnosticRelationships(
-  diagnostic: DiagnosticViewModel,
-  relationships?: SelectedEntityRelationshipsViewModel | undefined,
-): readonly SemanticReferenceViewModel[] {
-  if (!relationships || !diagnostic.fieldPath) {
-    return [];
-  }
-
-  const diagnosticFilePath = diagnostic.filePath;
-
-  return relationships.unresolvedReferences.filter((reference) => {
-    const sameField = reference.fieldPath === diagnostic.fieldPath;
-    const sameSourceFile = !diagnosticFilePath || reference.source.filePath === diagnosticFilePath;
-
-    return sameField && sameSourceFile;
-  });
-}
 
 function InspectorDiagnostics({
   diagnostics,

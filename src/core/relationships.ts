@@ -42,6 +42,8 @@ export interface UnresolvedReferenceTargetGroup {
   readonly references: readonly SemanticReferenceViewModel[];
 }
 
+export type RelationshipNavigationRole = 'source' | 'target';
+
 export type RelationshipNavigationTarget =
   | {
       readonly status: 'matched_entity';
@@ -127,16 +129,19 @@ export function groupUnresolvedReferencesByTarget(
 export function createRelationshipNavigationTarget(
   index: PathDerivedEntityIndex,
   reference: SemanticReferenceViewModel,
+  role: RelationshipNavigationRole = 'target',
 ): RelationshipNavigationTarget {
-  if (!reference.resolved) {
+  const navigationEntity = role === 'source' ? reference.source : reference.target;
+
+  if (!navigationEntity && !reference.resolved) {
     return { status: 'unresolved_reference' };
   }
 
-  if (!reference.target) {
+  if (!navigationEntity) {
     return { status: 'missing_target' };
   }
 
-  const matchingEntity = findPathDerivedEntityForReferenceEntity(index, reference.target);
+  const matchingEntity = findPathDerivedEntityForReferenceEntity(index, navigationEntity);
 
   if (!matchingEntity) {
     return { status: 'unmatched_target' };
@@ -153,6 +158,29 @@ export function findPathDerivedEntityForReferenceEntity(
   referenceEntity: SemanticReferenceEntity,
 ): PathDerivedModelEntity | undefined {
   return index.entities.find((entity) => isReferenceEntityMatch(referenceEntity, entity));
+}
+
+export function findUnresolvedReferencesForDiagnostic(
+  diagnostic: { readonly filePath?: string; readonly fieldPath?: string },
+  relationships: SelectedEntityRelationshipsViewModel | undefined,
+): readonly SemanticReferenceViewModel[] {
+  if (!relationships || !diagnostic.fieldPath) {
+    return [];
+  }
+
+  const diagnosticFilePath = diagnostic.filePath
+    ? normalizeWorkspacePath(diagnostic.filePath)
+    : undefined;
+
+  return relationships.unresolvedReferences.filter((reference) => {
+    const sameField = reference.fieldPath === diagnostic.fieldPath;
+    const sameSourceFile =
+      !diagnosticFilePath ||
+      (reference.source.filePath !== undefined &&
+        normalizeWorkspacePath(reference.source.filePath) === diagnosticFilePath);
+
+    return sameField && sameSourceFile;
+  });
 }
 
 function isReferenceTargetMatch(

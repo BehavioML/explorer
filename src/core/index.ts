@@ -19,9 +19,11 @@ export {
   createRelationshipNavigationTarget,
   createSelectedEntityRelationships,
   findPathDerivedEntityForReferenceEntity,
+  findUnresolvedReferencesForDiagnostic,
   groupUnresolvedReferencesByTarget,
 } from './relationships';
 export type {
+  RelationshipNavigationRole,
   RelationshipNavigationTarget,
   SelectedEntityRelationshipsViewModel,
   SemanticReferenceEntity,

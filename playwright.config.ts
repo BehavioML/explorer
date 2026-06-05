@@ -1,8 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
+import { resolveChromiumExecutablePath } from './playwright.browser';
+
+const chromiumExecutablePath = resolveChromiumExecutablePath();
 
 export default defineConfig({
   testDir: './e2e',
   outputDir: 'test-results',
+  globalSetup: './playwright.global-setup.ts',
   reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
   use: {
     baseURL: 'http://127.0.0.1:4173',
@@ -18,7 +22,10 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: chromiumExecutablePath ? { executablePath: chromiumExecutablePath } : undefined,
+      },
     },
   ],
 });

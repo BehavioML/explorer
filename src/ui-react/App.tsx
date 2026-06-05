@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   canonicalExampleDefinitions,
   extractUploadedArchive,
   loadCanonicalExampleWorkspace,
   type CanonicalExampleId,
 } from '../adapters/browser';
+import { generateDiagramArtifactForEntity } from '../adapters/generator';
 import { validateInMemoryModelWorkspace } from '../adapters/validator';
 import {
   BEHAVIOML_MODEL_SCOPE_DIRECTORIES,
@@ -13,6 +14,7 @@ import {
   createRelationshipNavigationTarget,
   findUnresolvedReferencesForDiagnostic,
   createSelectedEntityRelationships,
+  createGeneratingDiagramViewModel,
   createSourceFileView,
   createValidatedWorkspaceOverview,
   createWorkspaceOverview,
@@ -25,6 +27,7 @@ import {
   type PathDerivedEntitySelection,
   type PathDerivedModelEntity,
   type SearchResult,
+  type SelectedEntityDiagramViewModel,
   type SelectedEntityRelationshipsViewModel,
   type RelationshipNavigationSide,
   type SemanticReferenceViewModel,
@@ -79,6 +82,7 @@ export function App() {
   const [searchText, setSearchText] = useState('');
   const [activeActivity, setActiveActivity] = useState<ActivityMode>('explorer');
   const [workspaceDocumentState, setWorkspaceDocumentState] = useState(createInitialWorkspaceDocumentState);
+  const [diagramCache, setDiagramCache] = useState<Record<string, SelectedEntityDiagramViewModel>>({});
 
   async function handleArchiveSelected(file: File | undefined) {
     if (!file) {
@@ -120,6 +124,7 @@ export function App() {
     setSearchText('');
     setActiveActivity('explorer');
     setWorkspaceDocumentState(createInitialWorkspaceDocumentState());
+    setDiagramCache({});
     setStatus({ kind: 'loading', message: loadingMessage });
 
     try {
@@ -189,6 +194,15 @@ export function App() {
   const selectedDiagnostics = selected
     ? findDiagnosticsForEntity(validation?.diagnostics ?? [], selected)
     : [];
+  const activeDiagramCacheKey =
+    activeDocument.kind === 'entity' && activeDocument.activeView === 'diagram'
+      ? createDiagramCacheKey(activeDocument)
+      : undefined;
+  const activeDiagramView = activeDiagramCacheKey ? diagramCache[activeDiagramCacheKey] : undefined;
+  const displayedDiagramView =
+    activeDocument.kind === 'entity' && activeDocument.activeView === 'diagram'
+      ? activeDiagramView ?? createGeneratingDiagramViewModel(selected)
+      : undefined;
   const searchResults = useMemo(
     () =>
       entityIndex
@@ -196,6 +210,33 @@ export function App() {
         : ([] as readonly SearchResult[]),
     [entityIndex, searchText, workspaceFiles],
   );
+
+  useEffect(() => {
+    if (
+      activeDocument.kind !== 'entity' ||
+      activeDocument.activeView !== 'diagram' ||
+      !activeDiagramCacheKey ||
+      diagramCache[activeDiagramCacheKey]
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    void generateDiagramArtifactForEntity(workspaceFiles, selected).then((diagramView) => {
+      if (cancelled) {
+        return;
+      }
+
+      setDiagramCache((cache) => ({
+        ...cache,
+        [activeDiagramCacheKey]: diagramView,
+      }));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeDocument, activeDiagramCacheKey, diagramCache, selected, workspaceFiles]);
 
   function handleEntitySelected(selection: PathDerivedEntitySelection) {
     if (!selection) {
@@ -342,6 +383,7 @@ export function App() {
           activeDocument={activeDocument}
           documents={workspaceDocumentState.documents}
           diagnostics={selectedDiagnostics}
+          diagramView={displayedDiagramView}
           entity={selected}
           selectedDiagnostic={selectedDiagnostic}
           selectedSearchResult={selectedSearchResult}
@@ -586,7 +628,7 @@ function ExplorerPanel({
       {activeActivity === 'diagrams' ? (
         <PlaceholderPanel
           title="Diagrams"
-          message="Diagram navigation is reserved for future generated diagram surfaces. No diagram rendering is implemented in this workbench slice."
+          message="Open an entity tab and select Diagram to lazily request Generator-owned Mermaid artifacts. Rendered diagram canvas support remains future work."
         />
       ) : null}
 
@@ -603,6 +645,7 @@ function ExplorerPanel({
 function WorkspaceTabs({
   activeDocument,
   diagnostics,
+  diagramView,
   documents,
   entity,
   relationships,
@@ -618,6 +661,7 @@ function WorkspaceTabs({
 }: {
   readonly activeDocument: WorkspaceDocument;
   readonly diagnostics: readonly DiagnosticViewModel[];
+  readonly diagramView: SelectedEntityDiagramViewModel | undefined;
   readonly documents: readonly WorkspaceDocument[];
   readonly entity: PathDerivedModelEntity | undefined;
   readonly relationships: SelectedEntityRelationshipsViewModel | undefined;
@@ -668,6 +712,7 @@ function WorkspaceTabs({
           <EntityDocumentWorkspace
             activeView={activeDocument.activeView}
             diagnostics={diagnostics}
+            diagramView={diagramView}
             entity={entity}
             relationships={relationships}
             selectedDiagnostic={selectedDiagnostic}
@@ -685,6 +730,7 @@ function WorkspaceTabs({
 function EntityDocumentWorkspace({
   activeView,
   diagnostics,
+  diagramView,
   entity,
   relationships,
   selectedDiagnostic,
@@ -695,6 +741,7 @@ function EntityDocumentWorkspace({
 }: {
   readonly activeView: EntityWorkspaceDocumentView;
   readonly diagnostics: readonly DiagnosticViewModel[];
+  readonly diagramView: SelectedEntityDiagramViewModel | undefined;
   readonly entity: PathDerivedModelEntity | undefined;
   readonly relationships: SelectedEntityRelationshipsViewModel | undefined;
   readonly selectedDiagnostic: DiagnosticSelection | undefined;
@@ -747,7 +794,7 @@ function EntityDocumentWorkspace({
             onSelectTarget={onRelationshipTargetSelected}
           />
         ) : null}
-        {activeView === 'diagram' ? <DiagramPlaceholder entity={entity} /> : null}
+        {activeView === 'diagram' ? <DiagramView diagramView={diagramView} entity={entity} /> : null}
       </div>
     </div>
   );
@@ -851,7 +898,7 @@ function WorkspaceOverviewPanel({
           Review diagnostics
         </button>
         <button type="button" onClick={onOpenDiagrams}>
-          Diagram placeholder
+          Open diagrams
         </button>
       </div>
 
@@ -867,48 +914,74 @@ function WorkspaceOverviewPanel({
   );
 }
 
-function DiagramPlaceholder({ entity }: { readonly entity: PathDerivedModelEntity | undefined }) {
-  const placeholderLabel = formatDiagramPlaceholderLabel(entity);
+function DiagramView({
+  diagramView,
+  entity,
+}: {
+  readonly diagramView: SelectedEntityDiagramViewModel | undefined;
+  readonly entity: PathDerivedModelEntity | undefined;
+}) {
+  const view = diagramView ?? createGeneratingDiagramViewModel(entity);
+  const artifact = view.artifact;
 
   return (
-    <section className="diagram-placeholder" aria-labelledby="diagram-placeholder-title">
+    <section className="diagram-placeholder" aria-labelledby="diagram-view-title">
       <div className="diagram-title-row">
         <div>
-          <p className="eyebrow">Diagram</p>
-          <h2 id="diagram-placeholder-title">
-            {entity ? `Diagram: ${entity.displayName}` : 'Diagram workspace'}
-          </h2>
+          <p className="eyebrow">Generator diagram</p>
+          <h2 id="diagram-view-title">{view.title}</h2>
         </div>
         {entity ? <span>{entity.scope}</span> : null}
       </div>
-      <div className="diagram-canvas-placeholder" role="img" aria-label={placeholderLabel}>
-        <div className="diagram-canvas-grid" aria-hidden="true" />
-        <div className="diagram-canvas-message">
-          <strong>{placeholderLabel}</strong>
-          <span>
-            Empty canvas reserved for future diagram rendering. No relationships are inferred and no
-            fake diagram elements are rendered.
-          </span>
-        </div>
+
+      <div className="diagram-artifact-panel" aria-live="polite">
+        <p className={`diagram-status diagram-status--${view.status}`}>{view.message}</p>
+        {artifact ? (
+          <dl className="diagram-artifact-metadata" aria-label="Generated artifact metadata">
+            <div>
+              <dt>Kind</dt>
+              <dd>{artifact.kind}</dd>
+            </div>
+            <div>
+              <dt>Format</dt>
+              <dd>{artifact.format}</dd>
+            </div>
+            <div>
+              <dt>Path</dt>
+              <dd>{artifact.path || 'Generator did not provide a path'}</dd>
+            </div>
+          </dl>
+        ) : null}
+        <DiagramDiagnostics diagnostics={view.diagnostics} />
+        {artifact?.content ? (
+          <pre className="diagram-source" aria-label="Generated Mermaid source"><code>{artifact.content}</code></pre>
+        ) : null}
       </div>
     </section>
   );
 }
 
-function formatDiagramPlaceholderLabel(entity: PathDerivedModelEntity | undefined): string {
-  if (!entity) {
-    return 'No diagram view available for this entity type';
+function DiagramDiagnostics({ diagnostics }: { readonly diagnostics: readonly DiagnosticViewModel[] }) {
+  if (diagnostics.length === 0) {
+    return null;
   }
 
-  if (entity.scope === 'workflows') {
-    return 'Workflow / sequence diagram area';
-  }
+  return (
+    <div className="diagram-diagnostics" aria-label="Generator diagnostics">
+      <h3>Generator diagnostics</h3>
+      <ul>
+        {diagnostics.map((diagnostic, index) => (
+          <li key={`${diagnostic.severity}-${diagnostic.message}-${index}`}>
+            <strong>{diagnostic.severity}</strong>: {diagnostic.message}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
-  if (entity.scope === 'state-machines') {
-    return 'State machine diagram area';
-  }
-
-  return 'No diagram view available for this entity type';
+function createDiagramCacheKey(entity: Pick<PathDerivedModelEntity, 'scope' | 'identity'>): string {
+  return `${entity.scope}:${entity.identity}`;
 }
 
 function InspectorPanel({

@@ -64,6 +64,18 @@ export type {
 export { ApplicationError, adapterError, notImplemented } from './errors';
 export type { ApplicationErrorKind } from './errors';
 export {
+  createGeneratingDiagramViewModel,
+  createSelectedEntityDiagramViewModelFromArtifacts,
+  createStateMachineGeneratorLimitationViewModel,
+  createUnsupportedEntityDiagramViewModel,
+} from './diagrams';
+export type {
+  GeneratedDiagramArtifactViewModel,
+  GeneratedDiagramSourceEntity,
+  GeneratedDiagramStatus,
+  SelectedEntityDiagramViewModel,
+} from './diagrams';
+export {
   BEHAVIOML_MODEL_SCOPE_DIRECTORIES,
   detectWorkspaceRoot,
   normalizeWorkspacePath,

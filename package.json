@@ -14,7 +14,7 @@
     "test:browser": "playwright test"
   },
   "dependencies": {
-    "@behavioml/validator": "git+https://github.com/BehavioML/validator.git#be6814f169c0e46245394956fbe21548233b2797",
+    "@behavioml/validator": "git+https://github.com/BehavioML/validator.git#3b65bfe365a583a992b56c3d3347ddecc8ff5bfa",
     "fflate": "^0.8.3",
     "path-browserify": "^1.0.1",
     "react": "^19.1.0",

@@ -1,4 +1,11 @@
-import type { DiagnosticViewModel, ValidationResultViewModel, WorkspaceFileEntry } from '../../core';
+import type {
+  DiagnosticViewModel,
+  SemanticReferenceEntity,
+  SemanticReferenceIndexViewModel,
+  SemanticReferenceViewModel,
+  ValidationResultViewModel,
+  WorkspaceFileEntry,
+} from '../../core';
 import { ApplicationError } from '../../core';
 
 type ValidatorModule = typeof import('@behavioml/validator');
@@ -24,6 +31,29 @@ interface ValidatorDiagnosticLike {
   readonly fieldPath?: unknown;
 }
 
+interface ValidatorReferenceEntityLike {
+  readonly scope?: unknown;
+  readonly identity?: unknown;
+  readonly file?: unknown;
+  readonly filePath?: unknown;
+}
+
+interface ValidatorSemanticReferenceLike {
+  readonly source?: unknown;
+  readonly fieldPath?: unknown;
+  readonly targetScope?: unknown;
+  readonly targetIdentity?: unknown;
+  readonly resolved?: unknown;
+  readonly target?: unknown;
+}
+
+interface ValidatorReferenceIndexLike {
+  readonly entities?: unknown;
+  readonly outgoingReferences?: unknown;
+  readonly incomingReferences?: unknown;
+  readonly unresolvedReferences?: unknown;
+}
+
 interface ValidatorResultLike {
   readonly ok?: unknown;
   readonly valid?: unknown;
@@ -32,6 +62,7 @@ interface ValidatorResultLike {
   readonly warnings?: unknown;
   readonly summary?: unknown;
   readonly coverage?: unknown;
+  readonly referenceIndex?: unknown;
 }
 
 export async function validateInMemoryModelWorkspace(
@@ -94,6 +125,7 @@ function toValidationViewModel(rawResult: unknown): ValidationResultViewModel {
     diagnostics,
     summary: result?.summary,
     coverage: result?.coverage,
+    referenceIndex: toSemanticReferenceIndexViewModel(result?.referenceIndex),
   };
 }
 
@@ -128,6 +160,87 @@ function toDiagnosticViewModel(value: unknown, defaultSeverity = 'error'): Diagn
     filePath: readString(diagnostic?.filePath) ?? readString(diagnostic?.file),
     fieldPath:
       readString(diagnostic?.fieldPath) ?? readString(diagnostic?.field) ?? readString(diagnostic?.path),
+  };
+}
+
+function toSemanticReferenceIndexViewModel(
+  value: unknown,
+): SemanticReferenceIndexViewModel | undefined {
+  const referenceIndex = asObject<ValidatorReferenceIndexLike>(value);
+
+  if (!referenceIndex) {
+    return undefined;
+  }
+
+  return {
+    entities: toReferenceEntityArray(referenceIndex.entities),
+    outgoingReferences: toReferenceArray(referenceIndex.outgoingReferences),
+    incomingReferences: toReferenceArray(referenceIndex.incomingReferences),
+    unresolvedReferences: toReferenceArray(referenceIndex.unresolvedReferences),
+  };
+}
+
+function toReferenceEntityArray(value: unknown): SemanticReferenceEntity[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((entity) => {
+    const viewModel = toReferenceEntityViewModel(entity);
+
+    return viewModel ? [viewModel] : [];
+  });
+}
+
+function toReferenceArray(value: unknown): SemanticReferenceViewModel[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((reference) => {
+    const viewModel = toReferenceViewModel(reference);
+
+    return viewModel ? [viewModel] : [];
+  });
+}
+
+function toReferenceViewModel(value: unknown): SemanticReferenceViewModel | undefined {
+  const reference = asObject<ValidatorSemanticReferenceLike>(value);
+  const source = toReferenceEntityViewModel(reference?.source);
+  const fieldPath = readString(reference?.fieldPath);
+  const targetScope = readString(reference?.targetScope);
+  const targetIdentity = readString(reference?.targetIdentity);
+
+  if (!source || !fieldPath || !targetScope || !targetIdentity) {
+    return undefined;
+  }
+
+  const target = toReferenceEntityViewModel(reference?.target);
+
+  return {
+    source,
+    fieldPath,
+    targetScope,
+    targetIdentity,
+    resolved: typeof reference?.resolved === 'boolean' ? reference.resolved : Boolean(target),
+    ...(target ? { target } : {}),
+  };
+}
+
+function toReferenceEntityViewModel(value: unknown): SemanticReferenceEntity | undefined {
+  const entity = asObject<ValidatorReferenceEntityLike>(value);
+  const scope = readString(entity?.scope);
+  const identity = readString(entity?.identity);
+  const filePath = readString(entity?.filePath) ?? readString(entity?.file);
+
+  if (!scope || !identity) {
+    return undefined;
+  }
+
+  return {
+    scope,
+    identity,
+    ...(filePath ? { filePath } : {}),
   };
 }
 

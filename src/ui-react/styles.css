@@ -1184,3 +1184,62 @@ body:has(.app-shell--classic) {
 .entity-summary {
   min-width: 0;
 }
+
+.relationships-panel,
+.relationship-section,
+.inspector-relationships,
+.diagnostic-relationship-context {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.relationship-list,
+.relationship-groups ul,
+.diagnostic-relationship-context ul {
+  display: grid;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.relationship-row {
+  align-items: flex-start;
+  background: #151b29;
+  border: 1px solid #263247;
+  border-radius: 0.75rem;
+  color: inherit;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.65rem;
+  text-align: left;
+  width: 100%;
+}
+
+.relationship-row--button {
+  cursor: pointer;
+}
+
+.relationship-row--button:hover,
+.relationship-row--button:focus-visible {
+  border-color: #75a7ff;
+}
+
+.relationship-status {
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  justify-self: start;
+  padding: 0.15rem 0.45rem;
+  text-transform: uppercase;
+}
+
+.relationship-status--resolved {
+  background: rgba(36, 138, 92, 0.16);
+  color: #7ad6a6;
+}
+
+.relationship-status--unresolved {
+  background: rgba(180, 82, 64, 0.16);
+  color: #ff9a86;
+}

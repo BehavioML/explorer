@@ -15,6 +15,23 @@ export type {
   PathDerivedModelEntity,
 } from './entityIndex';
 export {
+  createEmptySemanticReferenceIndex,
+  createRelationshipNavigationTarget,
+  createSelectedEntityRelationships,
+  findPathDerivedEntityForReferenceEntity,
+  findUnresolvedReferencesForDiagnostic,
+  groupUnresolvedReferencesByTarget,
+} from './relationships';
+export type {
+  RelationshipNavigationRole,
+  RelationshipNavigationTarget,
+  SelectedEntityRelationshipsViewModel,
+  SemanticReferenceEntity,
+  SemanticReferenceIndexViewModel,
+  SemanticReferenceViewModel,
+  UnresolvedReferenceTargetGroup,
+} from './relationships';
+export {
   createDiagnosticNavigationTarget,
   findDiagnosticsForEntity,
   findEntityForDiagnostic,

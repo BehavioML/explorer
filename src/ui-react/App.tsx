@@ -10,6 +10,9 @@ import {
   BEHAVIOML_MODEL_SCOPE_DIRECTORIES,
   createDiagnosticNavigationTarget,
   createPathDerivedEntityIndex,
+  createRelationshipNavigationTarget,
+  findUnresolvedReferencesForDiagnostic,
+  createSelectedEntityRelationships,
   createSourceFileView,
   createValidatedWorkspaceOverview,
   createWorkspaceOverview,
@@ -23,6 +26,9 @@ import {
   type PathDerivedEntitySelection,
   type PathDerivedModelEntity,
   type SearchResult,
+  type SelectedEntityRelationshipsViewModel,
+  type RelationshipNavigationRole,
+  type SemanticReferenceViewModel,
   type SourceFileViewModel,
   type ValidationResultViewModel,
   type WorkspaceFileEntry,
@@ -170,6 +176,7 @@ export function App() {
   const validation = status.kind === 'validated' ? status.validation : undefined;
   const selected = entityIndex ? findSelectedEntity(entityIndex, selectedEntity) : undefined;
   const sourceView = selected ? createSourceFileView(workspaceFiles, selected) : undefined;
+  const selectedRelationships = createSelectedEntityRelationships(validation?.referenceIndex, selected);
   const selectedDiagnostics = selected
     ? findDiagnosticsForEntity(validation?.diagnostics ?? [], selected)
     : [];
@@ -209,6 +216,25 @@ export function App() {
     setSelectedSearchResult(undefined);
     if (query.trim().length > 0) {
       setActiveActivity('search');
+    }
+  }
+
+  function handleRelationshipTargetSelected(
+    reference: SemanticReferenceViewModel,
+    role: RelationshipNavigationRole,
+  ) {
+    if (!entityIndex) {
+      return;
+    }
+
+    const navigationTarget = createRelationshipNavigationTarget(entityIndex, reference, role);
+
+    if (navigationTarget.status === 'matched_entity') {
+      setSelectedEntity(navigationTarget.entityKey);
+      setSelectedDiagnostic(undefined);
+      setSelectedSearchResult(undefined);
+      setActiveActivity('relationships');
+      setActiveTab('source');
     }
   }
 
@@ -267,12 +293,14 @@ export function App() {
         <ExplorerPanel
           activeActivity={activeActivity}
           index={entityIndex}
+          relationships={selectedRelationships}
           searchResults={searchResults}
           searchText={searchText}
           selectedEntity={selectedEntity}
           selectedSearchResult={selectedSearchResult}
           validation={validation}
           workspaceOverview={workspaceOverview}
+          onRelationshipTargetSelected={handleRelationshipTargetSelected}
           onSearchQueryChanged={handleSearchQueryChanged}
           onSearchResultSelected={handleSearchResultSelected}
           onSelectActivity={setActiveActivity}
@@ -292,6 +320,7 @@ export function App() {
         />
         <InspectorPanel
           entity={selected}
+          relationships={selectedRelationships}
           selectedDiagnostic={selectedDiagnostic}
           selectedDiagnostics={selectedDiagnostics}
           selectedSearchResult={selectedSearchResult}
@@ -301,6 +330,7 @@ export function App() {
       </div>
 
       <DiagnosticsPanel
+        relationships={selectedRelationships}
         selectedDiagnostic={selectedDiagnostic}
         status={status}
         validation={validation}
@@ -443,12 +473,14 @@ function ActivityBar({
 function ExplorerPanel({
   activeActivity,
   index,
+  relationships,
   searchResults,
   searchText,
   selectedEntity,
   selectedSearchResult,
   validation,
   workspaceOverview,
+  onRelationshipTargetSelected,
   onSearchQueryChanged,
   onSearchResultSelected,
   onSelectActivity,
@@ -456,12 +488,17 @@ function ExplorerPanel({
 }: {
   readonly activeActivity: ActivityMode;
   readonly index: PathDerivedEntityIndex | undefined;
+  readonly relationships: SelectedEntityRelationshipsViewModel | undefined;
   readonly searchResults: readonly SearchResult[];
   readonly searchText: string;
   readonly selectedEntity: PathDerivedEntitySelection;
   readonly selectedSearchResult: SearchResult | undefined;
   readonly validation: ValidationResultViewModel | undefined;
   readonly workspaceOverview: WorkspaceOverviewViewModel | undefined;
+  readonly onRelationshipTargetSelected: (
+    reference: SemanticReferenceViewModel,
+    role: RelationshipNavigationRole,
+  ) => void;
   readonly onSearchQueryChanged: (query: string) => void;
   readonly onSearchResultSelected: (result: SearchResult) => void;
   readonly onSelectActivity: (activity: ActivityMode) => void;
@@ -518,9 +555,9 @@ function ExplorerPanel({
       ) : null}
 
       {activeActivity === 'relationships' ? (
-        <PlaceholderPanel
-          title="Relationships"
-          message="Relationship navigation, reference resolution, and backlinks are future work and are not inferred by this UI."
+        <RelationshipsPanel
+          relationships={relationships}
+          onSelectTarget={onRelationshipTargetSelected}
         />
       ) : null}
     </aside>
@@ -531,6 +568,7 @@ function WorkspaceTabs({
   activeTab,
   diagnostics,
   entity,
+  relationships,
   selectedDiagnostic,
   selectedSearchResult,
   sourceView,
@@ -542,6 +580,7 @@ function WorkspaceTabs({
   readonly activeTab: WorkspaceTab;
   readonly diagnostics: readonly DiagnosticViewModel[];
   readonly entity: PathDerivedModelEntity | undefined;
+  readonly relationships?: SelectedEntityRelationshipsViewModel | undefined;
   readonly selectedDiagnostic: DiagnosticSelection | undefined;
   readonly selectedSearchResult: SearchResult | undefined;
   readonly sourceView: SourceFileViewModel | undefined;
@@ -587,6 +626,7 @@ function WorkspaceTabs({
           <SourcePanel
             diagnostics={diagnostics}
             entity={entity}
+            relationships={relationships}
             selectedDiagnostic={selectedDiagnostic}
             selectedSearchResult={selectedSearchResult}
             sourceView={sourceView}
@@ -723,6 +763,7 @@ function formatDiagramPlaceholderLabel(entity: PathDerivedModelEntity | undefine
 
 function InspectorPanel({
   entity,
+  relationships,
   selectedDiagnostic,
   selectedDiagnostics,
   selectedSearchResult,
@@ -730,6 +771,7 @@ function InspectorPanel({
   validation,
 }: {
   readonly entity: PathDerivedModelEntity | undefined;
+  readonly relationships: SelectedEntityRelationshipsViewModel | undefined;
   readonly selectedDiagnostic: DiagnosticSelection | undefined;
   readonly selectedDiagnostics: readonly DiagnosticViewModel[];
   readonly selectedSearchResult: SearchResult | undefined;
@@ -744,19 +786,22 @@ function InspectorPanel({
       </div>
       <SelectedEntitySummary entity={entity} diagnosticCount={selectedDiagnostics.length} />
       <SourceMetadata sourceView={sourceView} />
-      <SelectedDiagnosticContext selection={selectedDiagnostic} />
+      <SelectedDiagnosticContext selection={selectedDiagnostic} relationships={relationships} />
       <SelectedSearchMatchContext result={selectedSearchResult} />
+      <InspectorRelationships relationships={relationships} />
       <InspectorDiagnostics diagnostics={selectedDiagnostics} validation={validation} />
     </aside>
   );
 }
 
 function DiagnosticsPanel({
+  relationships,
   selectedDiagnostic,
   status,
   validation,
   onSelectDiagnostic,
 }: {
+  readonly relationships: SelectedEntityRelationshipsViewModel | undefined;
   readonly selectedDiagnostic: DiagnosticSelection | undefined;
   readonly status: Status;
   readonly validation: ValidationResultViewModel | undefined;
@@ -778,6 +823,7 @@ function DiagnosticsPanel({
       </div>
       {validation ? (
         <ValidationDiagnostics
+          relationships={relationships}
           selectedDiagnostic={selectedDiagnostic}
           validation={validation}
           onSelectDiagnostic={onSelectDiagnostic}
@@ -1182,6 +1228,7 @@ function SourcePanel({
 }: {
   readonly diagnostics: readonly DiagnosticViewModel[];
   readonly entity: PathDerivedModelEntity | undefined;
+  readonly relationships?: SelectedEntityRelationshipsViewModel | undefined;
   readonly selectedDiagnostic: DiagnosticSelection | undefined;
   readonly selectedSearchResult: SearchResult | undefined;
   readonly sourceView: SourceFileViewModel | undefined;
@@ -1310,7 +1357,13 @@ function SelectedSourceDiagnostics({ diagnostics }: { readonly diagnostics: read
   );
 }
 
-function SelectedDiagnosticContext({ selection }: { readonly selection: DiagnosticSelection | undefined }) {
+function SelectedDiagnosticContext({
+  relationships,
+  selection,
+}: {
+  readonly relationships?: SelectedEntityRelationshipsViewModel | undefined;
+  readonly selection: DiagnosticSelection | undefined;
+}) {
   if (!selection) {
     return null;
   }
@@ -1350,9 +1403,197 @@ function SelectedDiagnosticContext({ selection }: { readonly selection: Diagnost
           </div>
         ) : null}
       </dl>
+      <DiagnosticRelationshipContext diagnostic={diagnostic} relationships={relationships} />
     </aside>
   );
 }
+
+
+function RelationshipsPanel({
+  relationships,
+  onSelectTarget,
+}: {
+  readonly relationships: SelectedEntityRelationshipsViewModel | undefined;
+  readonly onSelectTarget: (reference: SemanticReferenceViewModel, role: RelationshipNavigationRole) => void;
+}) {
+  if (!relationships) {
+    return (
+      <PlaceholderPanel
+        title="Relationships"
+        message="Load a validated workspace and select an entity to inspect Validator-backed relationships."
+      />
+    );
+  }
+
+  return (
+    <section className="relationships-panel" aria-label="Validator-backed relationships">
+      <h3>{relationships.entity.displayName}</h3>
+      <p>
+        References and backlinks are provided by Validator's semantic reference index; Explorer does
+        not infer them from source text.
+      </p>
+      <RelationshipReferenceList
+        title="Outgoing references"
+        emptyMessage="No outgoing semantic references for this entity."
+        references={relationships.outgoingReferences}
+        navigationRole="target"
+        onSelectTarget={onSelectTarget}
+      />
+      <RelationshipReferenceList
+        title="Incoming references / backlinks"
+        emptyMessage="No incoming backlinks for this entity."
+        references={relationships.incomingReferences}
+        navigationRole="source"
+        onSelectTarget={onSelectTarget}
+      />
+      <RelationshipReferenceList
+        title="Unresolved references involving this entity"
+        emptyMessage="No unresolved references involving this entity."
+        references={relationships.unresolvedReferences}
+        navigationRole="target"
+        onSelectTarget={onSelectTarget}
+      />
+      {relationships.unresolvedReferencesByTarget.length > 0 ? (
+        <div className="relationship-groups" aria-label="Unresolved references grouped by target">
+          <h4>Unresolved by target</h4>
+          <ul>
+            {relationships.unresolvedReferencesByTarget.map((group) => (
+              <li key={`${group.targetScope}:${group.targetIdentity}`}>
+                <code>{group.targetScope}:{group.targetIdentity}</code>
+                <span>{group.references.length} reference{group.references.length === 1 ? '' : 's'}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function RelationshipReferenceList({
+  emptyMessage,
+  navigationRole,
+  references,
+  title,
+  onSelectTarget,
+}: {
+  readonly emptyMessage: string;
+  readonly navigationRole: RelationshipNavigationRole;
+  readonly references: readonly SemanticReferenceViewModel[];
+  readonly title: string;
+  readonly onSelectTarget: (reference: SemanticReferenceViewModel, role: RelationshipNavigationRole) => void;
+}) {
+  return (
+    <section className="relationship-section" aria-label={title}>
+      <h4>{title}</h4>
+      {references.length > 0 ? (
+        <ul className="relationship-list">
+          {references.map((reference, index) => (
+            <RelationshipReferenceRow
+              navigationRole={navigationRole}
+              reference={reference}
+              key={`${reference.source.scope}:${reference.source.identity}:${reference.fieldPath}:${reference.targetScope}:${reference.targetIdentity}:${index}`}
+              onSelectTarget={onSelectTarget}
+            />
+          ))}
+        </ul>
+      ) : (
+        <p>{emptyMessage}</p>
+      )}
+    </section>
+  );
+}
+
+function RelationshipReferenceRow({
+  navigationRole,
+  reference,
+  onSelectTarget,
+}: {
+  readonly navigationRole: RelationshipNavigationRole;
+  readonly reference: SemanticReferenceViewModel;
+  readonly onSelectTarget: (reference: SemanticReferenceViewModel, role: RelationshipNavigationRole) => void;
+}) {
+  const targetFilePath = reference.target?.filePath;
+  const content = (
+    <>
+      <span className={`relationship-status relationship-status--${reference.resolved ? 'resolved' : 'unresolved'}`}>
+        {reference.resolved ? 'resolved' : 'unresolved'}
+      </span>
+      <span>Source <code>{reference.source.scope}:{reference.source.identity}</code></span>
+      <span>Field <code>{reference.fieldPath}</code></span>
+      <span>Target <code>{reference.targetScope}:{reference.targetIdentity}</code></span>
+      {targetFilePath ? <span>Target file <code>{targetFilePath}</code></span> : null}
+    </>
+  );
+
+  return (
+    <li>
+      {reference.resolved ? (
+        <button className="relationship-row relationship-row--button" type="button" onClick={() => onSelectTarget(reference, navigationRole)}>
+          {content}
+        </button>
+      ) : (
+        <div className="relationship-row">{content}</div>
+      )}
+    </li>
+  );
+}
+
+function InspectorRelationships({
+  relationships,
+}: {
+  readonly relationships: SelectedEntityRelationshipsViewModel | undefined;
+}) {
+  if (!relationships) {
+    return null;
+  }
+
+  return (
+    <section className="inspector-relationships" aria-label="Relationship summary">
+      <h3>Relationships</h3>
+      <dl className="entity-summary-list">
+        <div><dt>Outgoing</dt><dd>{relationships.outgoingReferences.length}</dd></div>
+        <div><dt>Incoming backlinks</dt><dd>{relationships.incomingReferences.length}</dd></div>
+        <div><dt>Unresolved</dt><dd>{relationships.unresolvedReferences.length}</dd></div>
+      </dl>
+    </section>
+  );
+}
+
+function DiagnosticRelationshipContext({
+  diagnostic,
+  relationships,
+}: {
+  readonly diagnostic: DiagnosticViewModel;
+  readonly relationships?: SelectedEntityRelationshipsViewModel | undefined;
+}) {
+  const relatedReferences = findUnresolvedReferencesForDiagnostic(diagnostic, relationships);
+
+  if (relatedReferences.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="diagnostic-relationship-context" aria-label="Diagnostic relationship context">
+      <h5>Relationship context</h5>
+      <ul>
+        {relatedReferences.map((reference, index) => (
+          <li key={`${reference.source.scope}:${reference.source.identity}:${reference.fieldPath}:${index}`}>
+            <code>{reference.fieldPath}</code> points to <code>{reference.targetScope}:{reference.targetIdentity}</code>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function countDiagnosticRelationships(
+  diagnostic: DiagnosticViewModel,
+  relationships?: SelectedEntityRelationshipsViewModel | undefined,
+): number {
+  return findUnresolvedReferencesForDiagnostic(diagnostic, relationships).length;
+}
+
 
 function InspectorDiagnostics({
   diagnostics,
@@ -1370,10 +1611,12 @@ function InspectorDiagnostics({
 }
 
 function ValidationDiagnostics({
+  relationships,
   selectedDiagnostic,
   validation,
   onSelectDiagnostic,
 }: {
+  readonly relationships?: SelectedEntityRelationshipsViewModel | undefined;
   readonly selectedDiagnostic: DiagnosticSelection | undefined;
   readonly validation: ValidationResultViewModel;
   readonly onSelectDiagnostic: (diagnostic: DiagnosticViewModel) => void;
@@ -1385,6 +1628,7 @@ function ValidationDiagnostics({
           {validation.diagnostics.map((diagnostic, index) => (
             <DiagnosticItem
               diagnostic={diagnostic}
+              relationshipCount={countDiagnosticRelationships(diagnostic, relationships)}
               isSelected={selectedDiagnostic?.diagnostic === diagnostic}
               key={`${diagnostic.filePath ?? 'workspace'}-${index}`}
               onSelect={diagnostic.filePath ? () => onSelectDiagnostic(diagnostic) : undefined}
@@ -1400,10 +1644,12 @@ function ValidationDiagnostics({
 
 function DiagnosticItem({
   diagnostic,
+  relationshipCount = 0,
   isSelected = false,
   onSelect,
 }: {
   readonly diagnostic: DiagnosticViewModel;
+  readonly relationshipCount?: number;
   readonly isSelected?: boolean;
   readonly onSelect?: () => void;
 }) {
@@ -1413,6 +1659,7 @@ function DiagnosticItem({
       <span className="diagnostic-message">{diagnostic.message}</span>
       {diagnostic.filePath ? <code>{diagnostic.filePath}</code> : null}
       {diagnostic.fieldPath ? <code>{diagnostic.fieldPath}</code> : null}
+      {relationshipCount > 0 ? <span>{relationshipCount} related unresolved reference{relationshipCount === 1 ? '' : 's'}</span> : null}
     </>
   );
 

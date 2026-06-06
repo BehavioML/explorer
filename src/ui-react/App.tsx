@@ -1326,7 +1326,7 @@ function DiagnosticsPanel({
   const summary = validation ? summarizeDiagnosticSeverities(validation.diagnostics) : undefined;
   const statusMessage = summary && validation
     ? formatCompactDiagnosticsStatus(summary, validation)
-    : status.message;
+    : 'Diagnostics will appear here after validation completes.';
 
   return (
     <section className="bottom-diagnostics" aria-label="Diagnostics panel">

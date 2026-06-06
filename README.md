@@ -217,9 +217,9 @@ known BehavioML scope counts, validation status, and a diagnostic summary.
 Scope counts are intentionally path-based and non-authoritative: Explorer counts
 workspace-relative files whose first path segment is one of the known model scope
 directories (`workflows`, `roles`, `capabilities`, `interfaces`, `components`,
-`modules`, `entities`, `events`, `state-machines`, or `decisions`). It does not
-inspect YAML or JSON content to infer entity kinds, references, generated
-artifacts, supporting artifacts, or model semantics.
+`modules`, `semantic-areas`, `events`, `entities`, `state-machines`, or
+`decisions`). It does not inspect YAML or JSON content to infer entity kinds,
+references, generated artifacts, supporting artifacts, or model semantics.
 
 The BehavioML Validator remains the authority for parsing, model loading,
 reference resolution, validation rules, diagnostics semantics, summaries, and
@@ -239,9 +239,17 @@ diagnostics are available.
 
 Entity identities are derived only from workspace-relative paths. For example,
 `capabilities/connection/send_initial.yaml` becomes scope `capabilities` and
-identity `connection/send_initial`. The entity browser recognizes `.yaml`,
-`.yml`, and `.json` files under known scope directories and ignores unknown
-directories plus non-model files.
+identity `connection/send_initial`; `semantic-areas/packet/protected_receive.yaml`
+becomes scope `semantic-areas` and identity `packet/protected_receive`. The
+entity browser recognizes `.yaml`, `.yml`, and `.json` files under known scope
+directories and ignores unknown directories plus non-model files.
+
+Semantic-area files are shown in the entity browser and existing raw Source view
+like any other path-derived source file. Explorer does not parse semantic-area
+YAML, read `workflows`, infer semantic areas from directories, resolve workflow
+references, validate forbidden fields, or synthesize semantic-area metadata.
+Semantic-area diagnostics must come from Validator diagnostics, and semantic-area
+relationships/backlinks must come from Validator `referenceIndex` output.
 
 These identities are non-authoritative beyond the current workspace file
 structure. Explorer does not parse YAML or JSON contents for entity fields, generated artifacts, supporting artifacts, diagrams, or
@@ -273,6 +281,11 @@ Current behavior:
   current Generator SDK returns aggregate state-machine output rather than a
   per-state-machine artifact. Explorer therefore shows a clear Generator
   limitation message instead of parsing or splitting Mermaid itself.
+- Semantic-area entity tabs currently show a Generator-artifact limitation
+  message. Semantic-area diagrams depend on Generator support for a
+  `semantic-area-workflows:<semantic-area-id>` artifact (or a future equivalent
+  Generator contract). Explorer does not infer semantic areas from directories
+  and does not generate SemanticArea Mermaid itself.
 - Unsupported entity scopes keep a clear unsupported placeholder.
 - Generator diagnostics, Mermaid render errors, empty artifact content,
   package/adapter failures, and malformed artifacts are surfaced as Diagram-view
@@ -292,7 +305,7 @@ The Relationships activity panel is backed by Validator's structured semantic re
 - unresolved references involving the selected entity, and
 - unresolved references grouped by target scope and identity.
 
-Each row shows the source entity, Validator field path, target scope/identity, resolved/unresolved status, and target file when Validator provides one. Clicking a resolved target selects the matching path-derived entity if that entity exists in the loaded workspace. Missing path-derived targets are handled as non-navigable rather than guessed. Explorer does not parse YAML, scan raw text, or reimplement reference-resolution rules to populate this panel.
+Each row shows the source entity, Validator field path, target scope/identity, resolved/unresolved status, and target file when Validator provides one. Clicking a resolved target selects the matching path-derived entity if that entity exists in the loaded workspace. Missing path-derived targets are handled as non-navigable rather than guessed. Semantic-area workflow relationships and backlinks are displayed only when Validator includes them in `referenceIndex`; Explorer does not parse YAML, scan raw text, or reimplement reference-resolution rules to populate this panel.
 
 
 ## Local search
@@ -405,8 +418,11 @@ exports `generateWorkspaceArtifacts`, `generateModelArtifacts`, and
 `loadWorkspaceModel` from `src/index.js`, accepts already-loaded in-memory
 workspace files, performs no filesystem IO, and supports Mermaid artifact
 requests such as `workflow-sequence:<workflow-id>`. This commit also includes
-source-map metadata on diagram artifacts. Updating this pin should be a deliberate
-dependency-integration change.
+source-map metadata on diagram artifacts. The inspected pinned Generator does not
+include a `semantic-area-workflows:<semantic-area-id>` artifact or semantic-area
+source entity contract, so Explorer intentionally shows a limitation message for
+semantic-area diagrams instead of making a fake Generator request. Updating this
+pin should be a deliberate dependency-integration change.
 
 The import remains deferred inside `src/adapters/generator/` so the React app and
 core layers continue to avoid direct Generator coupling. This dependency should
@@ -427,9 +443,15 @@ repository directly as a pinned Git dependency:
 
 The pinned commit is the current `main` revision inspected for this integration.
 It includes the public package metadata and workspace-provider API expected by
-the adapter: `InMemoryWorkspace` and `validateWorkspace`. Pinning a commit keeps
-Explorer installs reproducible while Validator remains unpublished; updating the
-pin should be a deliberate dependency-integration change.
+the adapter: `InMemoryWorkspace` and `validateWorkspace`. The inspected pinned
+Validator does not list `semantic-areas` in its source scopes and does not yet
+provide semantic-area diagnostics, `SemanticArea.workflows[]` references in
+`referenceIndex`, or semantic-area forbidden-field validation for `kind`, `owns`,
+`model_refs`, or component reference fields. Explorer therefore only consumes
+such semantic-area Validator output when an updated Validator provides it; it does
+not duplicate those rules locally. Pinning a commit keeps Explorer installs
+reproducible while Validator remains unpublished; updating the pin should be a
+deliberate dependency-integration change.
 
 The import remains deferred inside `src/adapters/validator/` so the React app and
 core layers continue to avoid direct Validator coupling. This dependency should

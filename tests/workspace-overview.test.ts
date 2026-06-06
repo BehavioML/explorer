@@ -26,11 +26,13 @@ test('counts nested files under known scope directories', () => {
     file('workflows/commerce/order.yaml'),
     file('state-machines/order/lifecycle.yml'),
     file('decisions/fraud/review.json'),
+    file('semantic-areas/packet/protected_receive.yaml'),
   ]);
 
   assert.equal(counts.workflows, 1);
   assert.equal(counts['state-machines'], 1);
   assert.equal(counts.decisions, 1);
+  assert.equal(counts['semantic-areas'], 1);
 });
 
 test('ignores files outside known scope directories', () => {
@@ -71,8 +73,9 @@ test('returns zero counts for an empty workspace', () => {
     interfaces: 0,
     components: 0,
     modules: 0,
-    entities: 0,
+    'semantic-areas': 0,
     events: 0,
+    entities: 0,
     'state-machines': 0,
     decisions: 0,
   });

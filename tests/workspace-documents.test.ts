@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   activateWorkspaceDocument,
+  closeWorkspaceDocument,
   createEntityWorkspaceDocumentId,
   createInitialWorkspaceDocumentState,
   openEntityWorkspaceDocument,
@@ -140,4 +141,34 @@ test('relationship navigation can open an entity document through the existing t
 
   assert.equal(state.activeDocumentId, 'entity:capabilities:validation/run_validation');
   assert.equal(state.documents.length, 2);
+});
+
+test('closing an inactive entity document removes only that document', () => {
+  const firstState = openEntityWorkspaceDocument(createInitialWorkspaceDocumentState(), searchWorkspace);
+  const secondState = openEntityWorkspaceDocument(firstState, runValidation);
+  const closedState = closeWorkspaceDocument(secondState, createEntityWorkspaceDocumentId(searchWorkspace));
+
+  assert.equal(closedState.activeDocumentId, createEntityWorkspaceDocumentId(runValidation));
+  assert.deepEqual(
+    closedState.documents.map((document) => document.id),
+    ['overview', 'entity:capabilities:validation/run_validation'],
+  );
+});
+
+test('closing the active entity document selects a neighboring document', () => {
+  const firstState = openEntityWorkspaceDocument(createInitialWorkspaceDocumentState(), searchWorkspace);
+  const secondState = openEntityWorkspaceDocument(firstState, runValidation);
+  const closedState = closeWorkspaceDocument(secondState, createEntityWorkspaceDocumentId(runValidation));
+
+  assert.equal(closedState.activeDocumentId, createEntityWorkspaceDocumentId(searchWorkspace));
+  assert.deepEqual(
+    closedState.documents.map((document) => document.id),
+    ['overview', 'entity:capabilities:search/search_workspace'],
+  );
+});
+
+test('overview document is not closable', () => {
+  const state = openEntityWorkspaceDocument(createInitialWorkspaceDocumentState(), searchWorkspace);
+
+  assert.deepEqual(closeWorkspaceDocument(state, 'overview'), state);
 });

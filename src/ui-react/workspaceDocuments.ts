@@ -77,6 +77,37 @@ export function openEntityWorkspaceDocument(
   };
 }
 
+export function closeWorkspaceDocument(
+  state: WorkspaceDocumentState,
+  documentId: WorkspaceDocumentId,
+): WorkspaceDocumentState {
+  if (documentId === OVERVIEW_WORKSPACE_DOCUMENT.id) {
+    return state;
+  }
+
+  const documentIndex = state.documents.findIndex((document) => document.id === documentId);
+
+  if (documentIndex < 0) {
+    return state;
+  }
+
+  const documents = state.documents.filter((document) => document.id !== documentId);
+
+  if (state.activeDocumentId !== documentId) {
+    return {
+      ...state,
+      documents,
+    };
+  }
+
+  const nextActiveDocument = documents[Math.min(documentIndex, documents.length - 1)] ?? OVERVIEW_WORKSPACE_DOCUMENT;
+
+  return {
+    documents,
+    activeDocumentId: nextActiveDocument.id,
+  };
+}
+
 export function activateWorkspaceDocument(
   state: WorkspaceDocumentState,
   documentId: WorkspaceDocumentId,

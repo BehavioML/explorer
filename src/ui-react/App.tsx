@@ -393,6 +393,7 @@ export function App() {
           sourceView={sourceView}
           validation={validation}
           workspaceOverview={workspaceOverview}
+          entityIndex={entityIndex}
           relationships={selectedRelationships}
           onRelationshipTargetSelected={handleRelationshipTargetSelected}
           onSelectActivity={setActiveActivity}
@@ -438,6 +439,8 @@ function TopBar({
   readonly onExampleSelected: (exampleId: CanonicalExampleId) => void;
   readonly onSearchChange: (query: string) => void;
 }) {
+  const summary = validation ? summarizeDiagnosticSeverities(validation.diagnostics) : workspaceOverview?.diagnosticSummary;
+
   return (
     <header className="top-bar">
       <div className="brand-lockup" aria-label="Application identity">
@@ -446,13 +449,27 @@ function TopBar({
         </span>
         <div>
           <strong>BehavioML Explorer</strong>
-          <span>{workspaceOverview?.modelRoot ?? 'No workspace loaded'}</span>
+          <span title={workspaceOverview?.sourceLabel}>{workspaceOverview?.sourceLabel ?? 'No archive loaded'}</span>
         </div>
+      </div>
+
+      <div className="top-bar-meta" aria-label="Loaded workspace metadata">
+        <span title={workspaceOverview?.modelRoot}>Root: {workspaceOverview?.modelRoot ?? '—'}</span>
       </div>
 
       <div className="top-bar-status" aria-live="polite">
         <span className={`status-dot status-dot--${status.kind}`} aria-hidden="true" />
-        <span>{formatTopBarStatus(status, validation)}</span>
+        <span className={`status-pill status-pill--${workspaceOverview?.validationStatus ?? status.kind}`}>
+          {workspaceOverview ? formatValidationStatus(workspaceOverview.validationStatus) : status.kind}
+        </span>
+        {summary ? (
+          <span className="diagnostic-counts">
+            <strong className="diagnostic-count diagnostic-count--error">{summary.errors}</strong> errors
+            <strong className="diagnostic-count diagnostic-count--warning">{summary.warnings}</strong> warnings
+          </span>
+        ) : (
+          <span>{formatTopBarStatus(status, validation)}</span>
+        )}
       </div>
 
       <label className="top-search">
@@ -460,7 +477,7 @@ function TopBar({
         <input
           type="search"
           value={searchText}
-          placeholder="Search workspace..."
+          placeholder="Search model..."
           disabled={!workspaceOverview}
           onChange={(event) => onSearchChange(event.currentTarget.value)}
         />
@@ -651,6 +668,7 @@ function WorkspaceTabs({
   diagramView,
   documents,
   entity,
+  entityIndex,
   relationships,
   selectedDiagnostic,
   selectedSearchResult,
@@ -667,6 +685,7 @@ function WorkspaceTabs({
   readonly diagramView: SelectedEntityDiagramViewModel | undefined;
   readonly documents: readonly WorkspaceDocument[];
   readonly entity: PathDerivedModelEntity | undefined;
+  readonly entityIndex: PathDerivedEntityIndex | undefined;
   readonly relationships: SelectedEntityRelationshipsViewModel | undefined;
   readonly selectedDiagnostic: DiagnosticSelection | undefined;
   readonly selectedSearchResult: SearchResult | undefined;
@@ -705,6 +724,7 @@ function WorkspaceTabs({
         {activeDocument.kind === 'overview' ? (
           <WorkspaceOverviewPanel
             overview={workspaceOverview}
+            entityIndex={entityIndex}
             validation={validation}
             onOpenDiagnostics={() => onSelectActivity('validation')}
             onOpenExplorer={() => onSelectActivity('explorer')}
@@ -840,12 +860,14 @@ function getActiveEntitySelection(document: WorkspaceDocument): PathDerivedEntit
 
 function WorkspaceOverviewPanel({
   overview,
+  entityIndex,
   validation,
   onOpenDiagnostics,
   onOpenExplorer,
   onOpenDiagrams,
 }: {
   readonly overview: WorkspaceOverviewViewModel | undefined;
+  readonly entityIndex: PathDerivedEntityIndex | undefined;
   readonly validation: ValidationResultViewModel | undefined;
   readonly onOpenDiagnostics: () => void;
   readonly onOpenExplorer: () => void;
@@ -864,49 +886,70 @@ function WorkspaceOverviewPanel({
     );
   }
 
+  const totalEntities = entityIndex?.totalEntities ?? Object.values(overview.scopeCounts).reduce((total, count) => total + count, 0);
+
   return (
     <section className="overview-workspace" aria-labelledby="workspace-overview-title">
       <div className="workspace-title-row">
         <div>
-          <p className="eyebrow">Overview</p>
-          <h2 id="workspace-overview-title">Workspace overview</h2>
+          <p className="eyebrow">Overview dashboard</p>
+          <h2 id="workspace-overview-title">Workspace summary</h2>
         </div>
-        <span className="health-pill">{formatValidationStatus(overview.validationStatus)}</span>
+        <span className={`health-pill health-pill--${overview.validationStatus}`}>{formatValidationStatus(overview.validationStatus)}</span>
       </div>
 
-      <dl className="workspace-summary compact-summary" aria-label="Loaded workspace overview">
-        <div>
-          <dt>Source</dt>
-          <dd>{overview.sourceLabel}</dd>
-        </div>
-        <div>
-          <dt>Model root</dt>
-          <dd>{overview.modelRoot}</dd>
-        </div>
-        <div>
-          <dt>Validation files</dt>
-          <dd>{overview.validationFileCount}</dd>
-        </div>
-        <div>
-          <dt>Diagnostics</dt>
-          <dd>{formatDiagnosticSummary(overview)}</dd>
-        </div>
-      </dl>
-
-      <div className="overview-actions" aria-label="Overview entry points">
-        <button type="button" onClick={onOpenExplorer}>
-          Browse entities
-        </button>
-        <button type="button" onClick={onOpenDiagnostics}>
-          Review diagnostics
-        </button>
-        <button type="button" onClick={onOpenDiagrams}>
-          Open diagrams
-        </button>
+      <div className="overview-card-grid" aria-label="Loaded workspace dashboard cards">
+        <article className="overview-card overview-card--wide">
+          <span>Workspace summary</span>
+          <strong>{overview.sourceLabel}</strong>
+          <p>{formatDiagnosticSummary(overview)}</p>
+        </article>
+        <article className="overview-card">
+          <span>Validation status</span>
+          <strong>{formatValidationStatus(overview.validationStatus)}</strong>
+          <p>{validation?.ok ? 'Validator reported no error diagnostics.' : 'Review diagnostics for model feedback.'}</p>
+        </article>
+        <article className="overview-card">
+          <span>Total entities</span>
+          <strong>{totalEntities}</strong>
+          <p>Path-derived model entities.</p>
+        </article>
+        <article className="overview-card">
+          <span>Model root</span>
+          <strong>{overview.modelRoot}</strong>
+          <p>Detected during archive loading.</p>
+        </article>
+        <article className="overview-card">
+          <span>Model files</span>
+          <strong>{overview.validationFileCount}</strong>
+          <p>Extracted files sent to validation.</p>
+        </article>
       </div>
 
-      <h3>Scope counts</h3>
-      <ScopeCountList overview={overview} />
+      <div className="overview-dashboard-grid">
+        <section className="overview-section-card" aria-labelledby="scope-counts-title">
+          <h3 id="scope-counts-title">Entity counts by scope</h3>
+          <ScopeCountList overview={overview} />
+        </section>
+
+        <section className="overview-section-card" aria-labelledby="quick-actions-title">
+          <h3 id="quick-actions-title">Quick actions</h3>
+          <div className="overview-actions" aria-label="Overview entry points">
+            <button type="button" onClick={onOpenExplorer}>
+              Explore workflows
+            </button>
+            <button type="button" onClick={onOpenDiagnostics}>
+              View diagnostics
+            </button>
+            <button type="button" onClick={onOpenDiagrams}>
+              Open diagrams
+            </button>
+          </div>
+          <p className="overview-note">
+            Quick actions only switch to existing Explorer activities; they do not introduce new routes or model behavior.
+          </p>
+        </section>
+      </div>
 
       <p className="overview-note">
         Scope counts and entities are path-derived from extracted workspace files. Source remains the
@@ -1082,7 +1125,7 @@ function InspectorPanel({
     <aside className="inspector-panel" aria-label="Inspector panel">
       <div className="panel-heading">
         <p className="eyebrow">Inspector</p>
-        <h2>Selection</h2>
+        <h2>Inspector</h2>
       </div>
       <SelectedEntitySummary entity={entity} diagnosticCount={selectedDiagnostics.length} />
       <SourceMetadata sourceView={sourceView} />
@@ -1572,6 +1615,11 @@ function SourcePanel({
       <SelectedSourceDiagnostics diagnostics={diagnostics} />
 
       <pre className="source-code"><code>{sourceView.content}</code></pre>
+      <footer className="source-status-footer" aria-label="Source status">
+        <span>{sourceView.extension.replace('.', '').toUpperCase()}</span>
+        <span>{sourceView.lineCount} lines</span>
+        <span>{sourceView.characterCount} characters</span>
+      </footer>
     </section>
   );
 }

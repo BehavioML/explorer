@@ -40,6 +40,7 @@ import {
 } from '../core';
 import {
   activateWorkspaceDocument,
+  closeWorkspaceDocument,
   createInitialWorkspaceDocumentState,
   findActiveWorkspaceDocument,
   openEntityWorkspaceDocument,
@@ -390,6 +391,27 @@ export function App() {
     setSelectedSearchResult(undefined);
   }
 
+  function handleWorkspaceDocumentClosed(document: WorkspaceDocument) {
+    if (document.kind === 'overview') {
+      return;
+    }
+
+    const nextState = closeWorkspaceDocument(workspaceDocumentState, document.id);
+    const nextActiveDocument = findActiveWorkspaceDocument(nextState);
+
+    setWorkspaceDocumentState(nextState);
+
+    if (workspaceDocumentState.activeDocumentId === document.id) {
+      if (nextActiveDocument.kind === 'entity') {
+        setSelectedEntity({ scope: nextActiveDocument.scope, identity: nextActiveDocument.identity });
+      } else {
+        setSelectedEntity(undefined);
+        setSelectedDiagnostic(undefined);
+        setSelectedSearchResult(undefined);
+      }
+    }
+  }
+
   function handleEntityDocumentViewSelected(view: EntityWorkspaceDocumentView) {
     setWorkspaceDocumentState((state) => setActiveEntityWorkspaceDocumentView(state, view));
   }
@@ -482,6 +504,7 @@ export function App() {
           relationships={selectedRelationships}
           onRelationshipTargetSelected={handleRelationshipTargetSelected}
           onSelectActivity={setActiveActivity}
+          onCloseDocument={handleWorkspaceDocumentClosed}
           onSelectDocument={handleWorkspaceDocumentSelected}
           onSelectEntityView={handleEntityDocumentViewSelected}
         />
@@ -611,7 +634,7 @@ function TopBar({
     <header className="top-bar">
       <div className="brand-lockup" aria-label="Application identity">
         <span className="app-icon" aria-hidden="true">
-          B
+          <img src="/icon.png" alt="" />
         </span>
         <div>
           <strong>BehavioML Explorer</strong>
@@ -844,6 +867,7 @@ function WorkspaceTabs({
   workspaceOverview,
   onRelationshipTargetSelected,
   onSelectActivity,
+  onCloseDocument,
   onSelectDocument,
   onSelectEntityView,
 }: {
@@ -864,27 +888,48 @@ function WorkspaceTabs({
     side: RelationshipNavigationSide,
   ) => void;
   readonly onSelectActivity: (activity: ActivityMode) => void;
+  readonly onCloseDocument: (document: WorkspaceDocument) => void;
   readonly onSelectDocument: (document: WorkspaceDocument) => void;
   readonly onSelectEntityView: (view: EntityWorkspaceDocumentView) => void;
 }) {
   return (
     <section className="workspace-area" aria-label="Workspace tabs and content">
       <div className="workspace-tab-strip" role="tablist" aria-label="Workspace documents">
-        {documents.map((document) => (
-          <button
-            className={
-              activeDocument.id === document.id ? 'workspace-tab workspace-tab--active' : 'workspace-tab'
-            }
-            type="button"
-            role="tab"
-            aria-selected={activeDocument.id === document.id}
-            title={formatWorkspaceDocumentTitle(document)}
-            key={document.id}
-            onClick={() => onSelectDocument(document)}
-          >
-            <span>{formatWorkspaceDocumentLabel(document, entity)}</span>
-          </button>
-        ))}
+        {documents.map((document) => {
+          const isActive = activeDocument.id === document.id;
+          const isClosable = document.kind !== 'overview';
+          const label = formatWorkspaceDocumentLabel(document, entity);
+
+          return (
+            <div
+              className={isActive ? 'workspace-tab workspace-tab--active' : 'workspace-tab'}
+              role="presentation"
+              key={document.id}
+            >
+              <button
+                className="workspace-tab-label"
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                title={formatWorkspaceDocumentTitle(document)}
+                onClick={() => onSelectDocument(document)}
+              >
+                <span>{label}</span>
+              </button>
+              {isClosable ? (
+                <button
+                  className="workspace-tab-close"
+                  type="button"
+                  aria-label={`Close ${label}`}
+                  title="Close tab"
+                  onClick={() => onCloseDocument(document)}
+                >
+                  ×
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
 
       <div className="workspace-content">

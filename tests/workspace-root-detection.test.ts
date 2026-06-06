@@ -340,3 +340,16 @@ function createZipBytes(files: Record<string, Uint8Array>): ArrayBuffer {
     zipBuffer.byteOffset + zipBuffer.byteLength,
   ) as ArrayBuffer;
 }
+
+
+test('recognizes semantic-area files as a BehavioML model root', () => {
+  const result = detectWorkspaceRoot([
+    { path: 'semantic-areas/packet/protected_receive.yaml', content: 'name: Protected packet receive' },
+  ]);
+
+  assert.equal(result.rootPath, '');
+  assert.deepEqual(
+    result.files.map((file) => file.path),
+    ['semantic-areas/packet/protected_receive.yaml'],
+  );
+});

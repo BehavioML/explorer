@@ -253,6 +253,169 @@ test('diagnostic relationship matching normalizes source file paths', () => {
   );
 });
 
+
+test('semantic-area relationships use Validator referenceIndex outgoing workflow references', () => {
+  const semanticFiles: readonly WorkspaceFileEntry[] = [
+    { path: 'semantic-areas/packet/protected_receive.yaml', content: 'name: Area' },
+    { path: 'workflows/packet/endpoint/receive_protected_packet.yaml', content: 'name: Workflow' },
+  ];
+  const index = createPathDerivedEntityIndex(semanticFiles);
+  const selected = index.entities.find(
+    (entity) => entity.scope === 'semantic-areas' && entity.identity === 'packet/protected_receive',
+  );
+  const relationships = createSelectedEntityRelationships(semanticAreaReferenceIndex, selected);
+
+  assert.deepEqual(
+    relationships?.outgoingReferences.map(
+      (reference) => `${reference.fieldPath}->${reference.targetScope}:${reference.targetIdentity}`,
+    ),
+    [
+      'workflows[0]->workflows:packet/endpoint/receive_protected_packet',
+      'workflows[1]->workflows:packet/endpoint/missing',
+    ],
+  );
+});
+
+test('workflow relationships include incoming Validator backlink from semantic area', () => {
+  const semanticFiles: readonly WorkspaceFileEntry[] = [
+    { path: 'semantic-areas/packet/protected_receive.yaml', content: 'name: Area' },
+    { path: 'workflows/packet/endpoint/receive_protected_packet.yaml', content: 'name: Workflow' },
+  ];
+  const index = createPathDerivedEntityIndex(semanticFiles);
+  const selected = index.entities.find(
+    (entity) => entity.scope === 'workflows' && entity.identity === 'packet/endpoint/receive_protected_packet',
+  );
+  const relationships = createSelectedEntityRelationships(semanticAreaReferenceIndex, selected);
+
+  assert.deepEqual(
+    relationships?.incomingReferences.map(
+      (reference) => `${reference.source.scope}:${reference.source.identity}:${reference.fieldPath}`,
+    ),
+    ['semantic-areas:packet/protected_receive:workflows[0]'],
+  );
+});
+
+test('unresolved semantic-area workflow references render as unresolved references', () => {
+  const semanticFiles: readonly WorkspaceFileEntry[] = [
+    { path: 'semantic-areas/packet/protected_receive.yaml', content: 'name: Area' },
+  ];
+  const index = createPathDerivedEntityIndex(semanticFiles);
+  const selected = index.entities.find(
+    (entity) => entity.scope === 'semantic-areas' && entity.identity === 'packet/protected_receive',
+  );
+  const relationships = createSelectedEntityRelationships(semanticAreaReferenceIndex, selected);
+
+  assert.deepEqual(
+    relationships?.unresolvedReferences.map(
+      (reference) => `${reference.fieldPath}->${reference.targetScope}:${reference.targetIdentity}:${reference.resolved}`,
+    ),
+    ['workflows[1]->workflows:packet/endpoint/missing:false'],
+  );
+  assert.deepEqual(relationships?.unresolvedReferencesByTarget, [
+    {
+      targetScope: 'workflows',
+      targetIdentity: 'packet/endpoint/missing',
+      references: [semanticAreaReferenceIndex.unresolvedReferences[0]],
+    },
+  ]);
+});
+
+test('semantic-area relationship navigation only matches existing path-derived entities', () => {
+  const completeIndex = createPathDerivedEntityIndex([
+    { path: 'semantic-areas/packet/protected_receive.yaml', content: 'name: Area' },
+    { path: 'workflows/packet/endpoint/receive_protected_packet.yaml', content: 'name: Workflow' },
+  ]);
+  const semanticOnlyIndex = createPathDerivedEntityIndex([
+    { path: 'semantic-areas/packet/protected_receive.yaml', content: 'name: Area' },
+  ]);
+
+  assert.deepEqual(
+    createRelationshipNavigationTarget(
+      completeIndex,
+      semanticAreaReferenceIndex.outgoingReferences[0],
+      'target',
+    ),
+    {
+      status: 'matched_entity',
+      entityKey: { scope: 'workflows', identity: 'packet/endpoint/receive_protected_packet' },
+    },
+  );
+  assert.deepEqual(
+    createRelationshipNavigationTarget(
+      semanticOnlyIndex,
+      semanticAreaReferenceIndex.outgoingReferences[0],
+      'target',
+    ),
+    { status: 'unmatched_target' },
+  );
+  assert.deepEqual(
+    createRelationshipNavigationTarget(
+      completeIndex,
+      semanticAreaReferenceIndex.incomingReferences[0],
+      'source',
+    ),
+    {
+      status: 'matched_entity',
+      entityKey: { scope: 'semantic-areas', identity: 'packet/protected_receive' },
+    },
+  );
+});
+
+const semanticAreaReferenceIndex: SemanticReferenceIndexViewModel = {
+  entities: [
+    {
+      scope: 'semantic-areas',
+      identity: 'packet/protected_receive',
+      filePath: 'semantic-areas/packet/protected_receive.yaml',
+    },
+    {
+      scope: 'workflows',
+      identity: 'packet/endpoint/receive_protected_packet',
+      filePath: 'workflows/packet/endpoint/receive_protected_packet.yaml',
+    },
+  ],
+  outgoingReferences: [
+    resolvedReference({
+      sourceScope: 'semantic-areas',
+      sourceIdentity: 'packet/protected_receive',
+      sourceFilePath: 'semantic-areas/packet/protected_receive.yaml',
+      fieldPath: 'workflows[0]',
+      targetScope: 'workflows',
+      targetIdentity: 'packet/endpoint/receive_protected_packet',
+      targetFilePath: 'workflows/packet/endpoint/receive_protected_packet.yaml',
+    }),
+    unresolvedReference({
+      sourceScope: 'semantic-areas',
+      sourceIdentity: 'packet/protected_receive',
+      sourceFilePath: 'semantic-areas/packet/protected_receive.yaml',
+      fieldPath: 'workflows[1]',
+      targetScope: 'workflows',
+      targetIdentity: 'packet/endpoint/missing',
+    }),
+  ],
+  incomingReferences: [
+    resolvedReference({
+      sourceScope: 'semantic-areas',
+      sourceIdentity: 'packet/protected_receive',
+      sourceFilePath: 'semantic-areas/packet/protected_receive.yaml',
+      fieldPath: 'workflows[0]',
+      targetScope: 'workflows',
+      targetIdentity: 'packet/endpoint/receive_protected_packet',
+      targetFilePath: 'workflows/packet/endpoint/receive_protected_packet.yaml',
+    }),
+  ],
+  unresolvedReferences: [
+    unresolvedReference({
+      sourceScope: 'semantic-areas',
+      sourceIdentity: 'packet/protected_receive',
+      sourceFilePath: 'semantic-areas/packet/protected_receive.yaml',
+      fieldPath: 'workflows[1]',
+      targetScope: 'workflows',
+      targetIdentity: 'packet/endpoint/missing',
+    }),
+  ],
+};
+
 function resolvedReference(input: {
   readonly sourceScope: string;
   readonly sourceIdentity: string;

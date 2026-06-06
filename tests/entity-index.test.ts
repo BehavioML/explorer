@@ -11,6 +11,7 @@ test('derives nested entity identities from paths under known scopes', () => {
   const index = createPathDerivedEntityIndex([
     file('capabilities/connection/send_initial.yaml'),
     file('workflows/customer/onboarding/main.yaml'),
+    file('semantic-areas/packet/protected_receive.yaml'),
   ]);
 
   assert.deepEqual(
@@ -34,6 +35,13 @@ test('derives nested entity identities from paths under known scopes', () => {
         identity: 'connection/send_initial',
         filePath: 'capabilities/connection/send_initial.yaml',
         displayName: 'send_initial',
+        extension: '.yaml',
+      },
+      {
+        scope: 'semantic-areas',
+        identity: 'packet/protected_receive',
+        filePath: 'semantic-areas/packet/protected_receive.yaml',
+        displayName: 'protected_receive',
         extension: '.yaml',
       },
     ],
@@ -88,6 +96,7 @@ test('ignores non-model files under known scopes', () => {
 test('normalizes paths and sorts by known scope order and identity', () => {
   const index = createPathDerivedEntityIndex([
     file('events\\order-created.yml'),
+    file('semantic-areas/packet/protected_receive.yaml'),
     file('./workflows/zeta.yaml'),
     file('workflows/alpha.yaml'),
     file('roles/user.yaml'),
@@ -103,6 +112,7 @@ test('normalizes paths and sorts by known scope order and identity', () => {
       'roles:user',
       'capabilities:payment/authorize',
       'capabilities:payment/refund',
+      'semantic-areas:packet/protected_receive',
       'events:order-created',
     ],
   );
@@ -140,14 +150,30 @@ test('returns an empty index and no default selection for an empty workspace', (
 
   assert.equal(index.totalEntities, 0);
   assert.equal(index.entities.length, 0);
-  assert.equal(index.scopes.length, 10);
+  assert.equal(index.scopes.length, 11);
   assert.deepEqual(
     index.scopes.map((scopeGroup) => scopeGroup.entities.length),
-    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   );
   assert.equal(getDefaultEntitySelection(index), undefined);
 });
 
-function file(path: string): WorkspaceFileEntry {
-  return { path, content: 'content intentionally not parsed' };
+function file(path: string, content = 'content intentionally not parsed'): WorkspaceFileEntry {
+  return { path, content };
 }
+
+
+test('indexes semantic-area files by path without parsing workflow references', () => {
+  const content = 'name: Area\nworkflows:\n  - missing/workflow\n';
+  const index = createPathDerivedEntityIndex([file('semantic-areas/packet/protected_receive.yaml', content)]);
+
+  assert.deepEqual(index.entities, [
+    {
+      scope: 'semantic-areas',
+      identity: 'packet/protected_receive',
+      filePath: 'semantic-areas/packet/protected_receive.yaml',
+      displayName: 'protected_receive',
+      extension: '.yaml',
+    },
+  ]);
+});

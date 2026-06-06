@@ -78,3 +78,28 @@ test('does not inspect YAML or JSON fields to build a source view', () => {
 function file(path: string, content: string): WorkspaceFileEntry {
   return { path, content };
 }
+
+
+test('displays semantic-area source as raw content without resolving workflow entries', () => {
+  const content = 'name: Area\nworkflows:\n  - missing/workflow\n';
+  const [entity] = createPathDerivedEntityIndex([
+    file('semantic-areas/packet/protected_receive.yaml', content),
+  ]).entities;
+
+  const view = createSourceFileView([
+    file('semantic-areas/packet/protected_receive.yaml', content),
+  ], entity);
+
+  assert.deepEqual(
+    {
+      entityIdentity: view?.entityIdentity,
+      entityScope: view?.entityScope,
+      content: view?.content,
+    },
+    {
+      entityIdentity: 'packet/protected_receive',
+      entityScope: 'semantic-areas',
+      content,
+    },
+  );
+});

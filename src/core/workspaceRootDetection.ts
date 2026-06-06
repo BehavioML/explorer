@@ -8,8 +8,9 @@ export const BEHAVIOML_MODEL_SCOPE_DIRECTORIES = [
   'interfaces',
   'components',
   'modules',
-  'entities',
+  'semantic-areas',
   'events',
+  'entities',
   'state-machines',
   'decisions',
 ] as const;

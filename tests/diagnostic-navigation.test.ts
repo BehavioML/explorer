@@ -93,6 +93,53 @@ test('preserves Validator field paths as opaque diagnostic display text', () => 
   assert.equal(target.diagnostic.fieldPath, 'foo.bar[0]');
 });
 
+
+test('matches semantic-area Validator diagnostics to path-derived semantic-area entities', () => {
+  const index = createPathDerivedEntityIndex([
+    file('semantic-areas/packet/protected_receive.yaml'),
+  ]);
+  const diagnostic = diagnosticFor(
+    'semantic-areas/packet/protected_receive.yaml',
+    'workflow reference is invalid',
+    'workflows[0]',
+  );
+
+  assert.deepEqual(findEntityForDiagnostic(index, diagnostic), {
+    scope: 'semantic-areas',
+    identity: 'packet/protected_receive',
+  });
+  assert.deepEqual(createDiagnosticNavigationTarget(index, diagnostic), {
+    diagnostic,
+    status: 'matched_entity',
+    entityKey: { scope: 'semantic-areas', identity: 'packet/protected_receive' },
+  });
+});
+
+test('finds selected semantic-area diagnostics by exact normalized file path only', () => {
+  const index = createPathDerivedEntityIndex([
+    file('semantic-areas/packet/protected_receive.yaml'),
+    file('semantic-areas/packet/other.yaml'),
+  ]);
+  const selected = index.entities.find(
+    (entity) => entity.scope === 'semantic-areas' && entity.identity === 'packet/protected_receive',
+  );
+  assert.ok(selected);
+
+  const diagnostics = [
+    diagnosticFor('semantic-areas\\packet\\protected_receive.yaml', 'workflow ref problem', 'workflows[0]'),
+    diagnosticFor('semantic-areas/packet/other.yaml', 'other area problem', 'workflows[0]'),
+    diagnosticFor('semantic-areas/packet/protected_receive.yaml.extra', 'not exact', 'workflows[0]'),
+  ];
+
+  assert.deepEqual(
+    findDiagnosticsForEntity(diagnostics, selected).map((diagnostic) => ({
+      message: diagnostic.message,
+      fieldPath: diagnostic.fieldPath,
+    })),
+    [{ message: 'workflow ref problem', fieldPath: 'workflows[0]' }],
+  );
+});
+
 function file(path: string): WorkspaceFileEntry {
   return { path, content: 'content intentionally not parsed' };
 }

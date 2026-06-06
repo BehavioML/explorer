@@ -66,6 +66,17 @@ export function createUnsupportedEntityDiagramViewModel(
     };
   }
 
+  if (entity.scope === 'semantic-areas') {
+    return {
+      status: 'unsupported_artifact',
+      title: `Diagram: ${entity.displayName}`,
+      message:
+        'Semantic-area diagrams require a semantic-area workflow artifact from BehavioML Generator; ' +
+        'Explorer does not generate semantic-area Mermaid locally.',
+      diagnostics: [],
+    };
+  }
+
   return {
     status: 'unsupported_entity',
     title: `Diagram: ${entity.displayName}`,

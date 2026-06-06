@@ -31,6 +31,14 @@ const stateMachineEntity: PathDerivedModelEntity = {
   extension: '.yaml',
 };
 
+const semanticAreaEntity: PathDerivedModelEntity = {
+  scope: 'semantic-areas',
+  identity: 'packet/protected_receive',
+  displayName: 'protected_receive',
+  filePath: 'semantic-areas/packet/protected_receive.yaml',
+  extension: '.yaml',
+};
+
 const files: readonly WorkspaceFileEntry[] = [
   { path: 'workflows/checkout/place_order.yaml', content: 'name: place order' },
 ];
@@ -178,6 +186,33 @@ test('state-machine entity reports generator limitation when per-entity artifact
 
   assert.equal(diagram.status, 'unsupported_artifact');
   assert.match(diagram.message, /does not yet expose a per-state-machine artifact/);
+});
+
+
+test('semantic-area entity reports generator artifact limitation without calling generator', async () => {
+  let generatorWasCalled = false;
+  const diagram = await generateDiagramArtifactForEntity(files, semanticAreaEntity, {
+    moduleLoader: async () => ({
+      generateWorkspaceArtifacts: () => {
+        generatorWasCalled = true;
+        return [
+          {
+            kind: 'semantic-area-workflows',
+            format: 'mermaid',
+            title: 'Semantic area workflows: packet/protected_receive',
+            path: 'generated/semantic-areas/packet/protected_receive.mmd',
+            content: 'flowchart TD\n',
+            sourceEntity: { kind: 'semantic-area', id: 'packet/protected_receive' },
+          },
+        ];
+      },
+    }),
+  });
+
+  assert.equal(generatorWasCalled, false);
+  assert.equal(diagram.status, 'unsupported_artifact');
+  assert.match(diagram.message, /semantic-area workflow artifact/i);
+  assert.match(diagram.message, /does not generate semantic-area Mermaid locally/);
 });
 
 test('malformed generator artifact collections are adapter errors', async () => {

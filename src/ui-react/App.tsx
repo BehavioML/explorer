@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   canonicalExampleDefinitions,
   extractUploadedArchive,
@@ -59,14 +59,29 @@ type ActivityMode = 'explorer' | 'search' | 'validation' | 'diagrams' | 'relatio
 const activityItems: readonly {
   readonly id: ActivityMode;
   readonly label: string;
-  readonly shortLabel: string;
 }[] = [
-  { id: 'explorer', label: 'Explorer', shortLabel: 'Exp' },
-  { id: 'search', label: 'Search', shortLabel: 'Find' },
-  { id: 'validation', label: 'Validation', shortLabel: 'Val' },
-  { id: 'diagrams', label: 'Diagrams', shortLabel: 'Dia' },
-  { id: 'relationships', label: 'Relationships', shortLabel: 'Rel' },
+  { id: 'explorer', label: 'Explorer' },
+  { id: 'search', label: 'Search' },
+  { id: 'validation', label: 'Validation' },
+  { id: 'diagrams', label: 'Diagrams' },
+  { id: 'relationships', label: 'Relationships' },
 ];
+
+const layoutConstraints = {
+  explorerMin: 220,
+  explorerMax: 420,
+  inspectorMin: 240,
+  inspectorMax: 460,
+  diagnosticsMin: 32,
+  diagnosticsMax: 320,
+  diagnosticsDefaultExpanded: 220,
+} as const;
+
+type WorkbenchLayoutSizes = {
+  readonly explorerWidth: number;
+  readonly inspectorWidth: number;
+  readonly diagnosticsHeight: number;
+};
 
 export function App() {
   const [status, setStatus] = useState<Status>({
@@ -84,6 +99,12 @@ export function App() {
   const [activeActivity, setActiveActivity] = useState<ActivityMode>('explorer');
   const [workspaceDocumentState, setWorkspaceDocumentState] = useState(createInitialWorkspaceDocumentState);
   const [diagramCache, setDiagramCache] = useState<Record<string, SelectedEntityDiagramViewModel>>({});
+  const [layoutSizes, setLayoutSizes] = useState<WorkbenchLayoutSizes>({
+    explorerWidth: 288,
+    inspectorWidth: 320,
+    diagnosticsHeight: layoutConstraints.diagnosticsMin,
+  });
+  const [isDiagnosticsExpanded, setDiagnosticsExpanded] = useState(false);
 
   async function handleArchiveSelected(file: File | undefined) {
     if (!file) {
@@ -269,6 +290,55 @@ export function App() {
     }
   }
 
+  function resizeExplorerPanel(delta: number) {
+    setLayoutSizes((sizes) => ({
+      ...sizes,
+      explorerWidth: clampSize(
+        sizes.explorerWidth + delta,
+        layoutConstraints.explorerMin,
+        layoutConstraints.explorerMax,
+      ),
+    }));
+  }
+
+  function resizeInspectorPanel(delta: number) {
+    setLayoutSizes((sizes) => ({
+      ...sizes,
+      inspectorWidth: clampSize(
+        sizes.inspectorWidth - delta,
+        layoutConstraints.inspectorMin,
+        layoutConstraints.inspectorMax,
+      ),
+    }));
+  }
+
+  function resizeDiagnosticsPanel(delta: number) {
+    setDiagnosticsExpanded(true);
+    setLayoutSizes((sizes) => ({
+      ...sizes,
+      diagnosticsHeight: clampSize(
+        sizes.diagnosticsHeight - delta,
+        layoutConstraints.diagnosticsMin,
+        layoutConstraints.diagnosticsMax,
+      ),
+    }));
+  }
+
+  function toggleDiagnosticsExpanded() {
+    setDiagnosticsExpanded((expanded) => {
+      const nextExpanded = !expanded;
+
+      setLayoutSizes((sizes) => ({
+        ...sizes,
+        diagnosticsHeight: nextExpanded
+          ? Math.max(sizes.diagnosticsHeight, layoutConstraints.diagnosticsDefaultExpanded)
+          : layoutConstraints.diagnosticsMin,
+      }));
+
+      return nextExpanded;
+    });
+  }
+
   function handleSearchQueryChanged(query: string) {
     setSearchText(query);
     setSelectedSearchResult(undefined);
@@ -352,8 +422,18 @@ export function App() {
     );
   }
 
+  const workbenchLayoutStyle = {
+    '--explorer-width': `${layoutSizes.explorerWidth}px`,
+    '--inspector-width': `${layoutSizes.inspectorWidth}px`,
+    '--diagnostics-height': `${isDiagnosticsExpanded ? layoutSizes.diagnosticsHeight : layoutConstraints.diagnosticsMin}px`,
+  } as CSSProperties;
+
   return (
-    <main className="workbench-shell" aria-label="BehavioML Explorer workbench">
+    <main
+      className={isDiagnosticsExpanded ? 'workbench-shell workbench-shell--diagnostics-expanded' : 'workbench-shell'}
+      style={workbenchLayoutStyle}
+      aria-label="BehavioML Explorer workbench"
+    >
       <TopBar
         searchText={searchText}
         status={status}
@@ -382,6 +462,11 @@ export function App() {
           onSelectActivity={setActiveActivity}
           onSelectEntity={handleEntitySelected}
         />
+        <ResizeHandle
+          orientation="vertical"
+          label="Resize Explorer panel"
+          onResize={resizeExplorerPanel}
+        />
         <WorkspaceTabs
           activeDocument={activeDocument}
           documents={workspaceDocumentState.documents}
@@ -400,6 +485,11 @@ export function App() {
           onSelectDocument={handleWorkspaceDocumentSelected}
           onSelectEntityView={handleEntityDocumentViewSelected}
         />
+        <ResizeHandle
+          orientation="vertical"
+          label="Resize Inspector panel"
+          onResize={resizeInspectorPanel}
+        />
         <InspectorPanel
           entity={selected}
           relationships={selectedRelationships}
@@ -412,13 +502,89 @@ export function App() {
       </div>
 
       <DiagnosticsPanel
+        isExpanded={isDiagnosticsExpanded}
         relationships={selectedRelationships}
         selectedDiagnostic={selectedDiagnostic}
         status={status}
         validation={validation}
+        onResize={resizeDiagnosticsPanel}
         onSelectDiagnostic={handleDiagnosticSelected}
+        onToggleExpanded={toggleDiagnosticsExpanded}
       />
     </main>
+  );
+}
+
+function ResizeHandle({
+  className,
+  label,
+  orientation,
+  onResize,
+}: {
+  readonly className?: string;
+  readonly label: string;
+  readonly orientation: 'horizontal' | 'vertical';
+  readonly onResize: (delta: number) => void;
+}) {
+  const lastPosition = useRef<number | undefined>(undefined);
+
+  return (
+    <div
+      className={[
+        'resize-handle',
+        `resize-handle--${orientation}`,
+        className,
+      ].filter(Boolean).join(' ')}
+      role="separator"
+      aria-label={label}
+      aria-orientation={orientation}
+      tabIndex={0}
+      onPointerDown={(event) => {
+        lastPosition.current = orientation === 'vertical' ? event.clientX : event.clientY;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        event.preventDefault();
+      }}
+      onPointerMove={(event) => {
+        if (lastPosition.current === undefined || !event.currentTarget.hasPointerCapture(event.pointerId)) {
+          return;
+        }
+
+        const nextPosition = orientation === 'vertical' ? event.clientX : event.clientY;
+        onResize(nextPosition - lastPosition.current);
+        lastPosition.current = nextPosition;
+      }}
+      onPointerUp={(event) => {
+        lastPosition.current = undefined;
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+      }}
+      onPointerCancel={() => {
+        lastPosition.current = undefined;
+      }}
+    />
+  );
+}
+
+function ActivityIcon({ activity }: { readonly activity: ActivityMode }) {
+  return (
+    <svg className="activity-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      {activity === 'explorer' ? (
+        <path d="M4 5.5h6l1.5 2H20v11H4zM4 8h16" />
+      ) : null}
+      {activity === 'search' ? (
+        <path d="M10.5 17a6.5 6.5 0 1 1 4.6-1.9L20 20M10.5 6.5v8M6.5 10.5h8" />
+      ) : null}
+      {activity === 'validation' ? (
+        <path d="M12 3.5 19 7v5.5c0 3.6-2.6 6.6-7 8-4.4-1.4-7-4.4-7-8V7zM8.5 12l2.2 2.2 4.8-5" />
+      ) : null}
+      {activity === 'diagrams' ? (
+        <path d="M6 6h4v4H6zM14 6h4v4h-4zM10 8h4M8 10v4M16 10v4M6 14h4v4H6zM14 14h4v4h-4zM10 16h4" />
+      ) : null}
+      {activity === 'relationships' ? (
+        <path d="M7 7h4v4H7zM13 13h4v4h-4zM11 9.5c2.5 0 3.5 1 3.5 3.5M5 17c1.5-4.5 9-8.5 14-10" />
+      ) : null}
+    </svg>
   );
 }
 
@@ -555,13 +721,14 @@ function ActivityBar({
             activeActivity === item.id ? 'activity-button activity-button--active' : 'activity-button'
           }
           type="button"
+          aria-label={item.label}
           aria-pressed={activeActivity === item.id}
           title={item.label}
           key={item.id}
           onClick={() => onSelectActivity(item.id)}
         >
-          <span>{item.shortLabel}</span>
-          <small>{item.label}</small>
+          <ActivityIcon activity={item.id} />
+          <span className="visually-hidden">{item.label}</span>
         </button>
       ))}
     </nav>
@@ -1138,42 +1305,68 @@ function InspectorPanel({
 }
 
 function DiagnosticsPanel({
+  isExpanded,
   relationships,
   selectedDiagnostic,
   status,
   validation,
+  onResize,
   onSelectDiagnostic,
+  onToggleExpanded,
 }: {
+  readonly isExpanded: boolean;
   readonly relationships: SelectedEntityRelationshipsViewModel | undefined;
   readonly selectedDiagnostic: DiagnosticSelection | undefined;
   readonly status: Status;
   readonly validation: ValidationResultViewModel | undefined;
+  readonly onResize: (delta: number) => void;
   readonly onSelectDiagnostic: (diagnostic: DiagnosticViewModel) => void;
+  readonly onToggleExpanded: () => void;
 }) {
   const summary = validation ? summarizeDiagnosticSeverities(validation.diagnostics) : undefined;
+  const statusMessage = summary && validation
+    ? formatCompactDiagnosticsStatus(summary, validation)
+    : status.message;
 
   return (
     <section className="bottom-diagnostics" aria-label="Diagnostics panel">
-      <div className="diagnostics-heading">
+      <ResizeHandle
+        className="resize-handle--diagnostics"
+        orientation="horizontal"
+        label="Resize Diagnostics panel"
+        onResize={onResize}
+      />
+      <div className="diagnostics-status-bar" aria-live="polite">
         <strong>Diagnostics</strong>
+        <span className="diagnostics-status-message">{statusMessage}</span>
         {summary ? (
-          <span>
-            Errors {summary.errors} | Warnings {summary.warnings} | Info {summary.other}
+          <span className="diagnostics-status-counts" aria-label="Validation diagnostic counts">
+            <span className="diagnostics-count diagnostics-count--error">Errors {summary.errors}</span>
+            <span className="diagnostics-count diagnostics-count--warning">Warnings {summary.warnings}</span>
+            <span className="diagnostics-count diagnostics-count--info">Info {summary.other}</span>
           </span>
-        ) : (
-          <span>{status.message}</span>
-        )}
+        ) : null}
+        <button
+          className="diagnostics-toggle"
+          type="button"
+          aria-expanded={isExpanded}
+          onClick={onToggleExpanded}
+        >
+          {isExpanded ? 'Hide details' : 'Details'}
+        </button>
       </div>
-      {validation ? (
-        <ValidationDiagnostics
-          relationships={relationships}
-          selectedDiagnostic={selectedDiagnostic}
-          validation={validation}
-          onSelectDiagnostic={onSelectDiagnostic}
-        />
-      ) : (
-        <p className="empty-diagnostics">Diagnostics will appear here after validation completes.</p>
-      )}
+      {isExpanded ? (
+        validation ? (
+          <ValidationDiagnostics
+            relationships={relationships}
+            selectedDiagnostic={selectedDiagnostic}
+            validation={validation}
+            onSelectDiagnostic={onSelectDiagnostic}
+          />
+        ) : (
+          <p className="empty-diagnostics">Diagnostics will appear here after validation completes.</p>
+        )
+      ) : null}
     </section>
   );
 }
@@ -2128,6 +2321,32 @@ function formatTopBarStatus(
   }
 
   return status.message;
+}
+
+function clampSize(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+function formatCompactDiagnosticsStatus(
+  summary: { readonly errors: number; readonly warnings: number; readonly other: number },
+  validation: ValidationResultViewModel,
+): string {
+  if (summary.errors === 0 && summary.warnings === 0 && summary.other === 0) {
+    return validation.ok ? 'Validation completed successfully' : 'Validation completed';
+  }
+
+  const parts: string[] = [];
+  if (summary.errors > 0) {
+    parts.push(`${summary.errors} error${summary.errors === 1 ? '' : 's'}`);
+  }
+  if (summary.warnings > 0) {
+    parts.push(`${summary.warnings} warning${summary.warnings === 1 ? '' : 's'}`);
+  }
+  if (summary.other > 0) {
+    parts.push(`${summary.other} info`);
+  }
+
+  return parts.join(' · ');
 }
 
 function formatActivityTitle(activity: ActivityMode): string {

@@ -26,6 +26,38 @@ test('Mermaid render adapter initializes strict browser rendering and returns SV
   assert.deepEqual(result, { status: 'rendered', svg: '<svg role="img"></svg>' });
 });
 
+
+test('Mermaid render adapter gives repeated renders unique caller-provided ids', async () => {
+  const ids: string[] = [];
+
+  await renderMermaidDiagram('sequenceDiagram\n', {
+    diagramId: 'workflow:checkout/place_order-1',
+    moduleLoader: async () => ({
+      default: {
+        initialize: () => undefined,
+        render: (id) => {
+          ids.push(id);
+          return { svg: '<svg></svg>' };
+        },
+      },
+    }),
+  });
+  await renderMermaidDiagram('sequenceDiagram\n', {
+    diagramId: 'workflow:checkout/place_order-2',
+    moduleLoader: async () => ({
+      default: {
+        initialize: () => undefined,
+        render: (id) => {
+          ids.push(id);
+          return { svg: '<svg></svg>' };
+        },
+      },
+    }),
+  });
+
+  assert.deepEqual(ids, ['workflow-checkout-place_order-1', 'workflow-checkout-place_order-2']);
+});
+
 test('Mermaid render adapter maps renderer failures to render errors', async () => {
   const result = await renderMermaidDiagram('not mermaid', {
     moduleLoader: async () => ({

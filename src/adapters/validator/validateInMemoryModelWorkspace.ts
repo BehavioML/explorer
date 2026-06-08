@@ -1,5 +1,6 @@
 import type {
   DiagnosticViewModel,
+  EntitySummaryViewModel,
   SemanticReferenceEntity,
   SemanticReferenceIndexViewModel,
   SemanticReferenceViewModel,
@@ -29,6 +30,14 @@ interface ValidatorDiagnosticLike {
   readonly path?: unknown;
   readonly field?: unknown;
   readonly fieldPath?: unknown;
+}
+
+interface ValidatorEntityLike {
+  readonly scope?: unknown;
+  readonly identity?: unknown;
+  readonly file?: unknown;
+  readonly filePath?: unknown;
+  readonly document?: unknown;
 }
 
 interface ValidatorReferenceEntityLike {
@@ -63,6 +72,7 @@ interface ValidatorResultLike {
   readonly summary?: unknown;
   readonly coverage?: unknown;
   readonly referenceIndex?: unknown;
+  readonly entities?: unknown;
 }
 
 export async function validateInMemoryModelWorkspace(
@@ -126,6 +136,7 @@ function toValidationViewModel(rawResult: unknown): ValidationResultViewModel {
     summary: result?.summary,
     coverage: result?.coverage,
     referenceIndex: toSemanticReferenceIndexViewModel(result?.referenceIndex),
+    entitySummaries: toEntitySummaryArray(result?.entities),
   };
 }
 
@@ -161,6 +172,55 @@ function toDiagnosticViewModel(value: unknown, defaultSeverity = 'error'): Diagn
     fieldPath:
       readString(diagnostic?.fieldPath) ?? readString(diagnostic?.field) ?? readString(diagnostic?.path),
   };
+}
+
+
+function toEntitySummaryArray(value: unknown): EntitySummaryViewModel[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((entity) => {
+    const summary = toEntitySummaryViewModel(entity);
+
+    return summary ? [summary] : [];
+  });
+}
+
+function toEntitySummaryViewModel(value: unknown): EntitySummaryViewModel | undefined {
+  const entity = asObject<ValidatorEntityLike>(value);
+  const scope = readString(entity?.scope);
+
+  if (scope !== 'semantic-areas') {
+    return undefined;
+  }
+
+  const identity = readString(entity?.identity);
+
+  if (!identity) {
+    return undefined;
+  }
+
+  const document = asObject<Record<string, unknown>>(entity?.document);
+  const displayName = readString(document?.name) ?? readString(document?.title);
+  const description = readString(document?.description);
+
+  return {
+    scope,
+    identity,
+    filePath: readString(entity?.filePath) ?? readString(entity?.file),
+    ...(displayName ? { displayName } : {}),
+    ...(description ? { description } : {}),
+    workflowReferences: toStringArray(document?.workflows),
+  };
+}
+
+function toStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((item): item is string => typeof item === 'string' && item.length > 0);
 }
 
 function toSemanticReferenceIndexViewModel(

@@ -16,12 +16,24 @@ export interface DiagnosticViewModel {
   readonly fieldPath?: string;
 }
 
+export interface SemanticAreaEntitySummaryViewModel {
+  readonly scope: 'semantic-areas';
+  readonly identity: string;
+  readonly filePath?: string;
+  readonly displayName?: string;
+  readonly description?: string;
+  readonly workflowReferences: readonly string[];
+}
+
+export type EntitySummaryViewModel = SemanticAreaEntitySummaryViewModel;
+
 export interface ValidationResultViewModel {
   readonly ok: boolean;
   readonly diagnostics: readonly DiagnosticViewModel[];
   readonly summary?: unknown;
   readonly coverage?: unknown;
   readonly referenceIndex?: SemanticReferenceIndexViewModel;
+  readonly entitySummaries?: readonly EntitySummaryViewModel[];
 }
 
 export type DiagnosticNavigationStatus =

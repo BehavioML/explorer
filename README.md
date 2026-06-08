@@ -224,9 +224,11 @@ references, generated artifacts, supporting artifacts, or model semantics.
 The BehavioML Validator remains the authority for parsing, model loading,
 reference resolution, validation rules, diagnostics semantics, summaries, and
 coverage. Explorer supports local text/path search over already extracted
-workspace files and path-derived entity metadata. Reference/backlink display is limited to Validator's structured semantic reference index; semantic search, generated artifact discovery, supporting artifact
-discovery, diagram rendering, editing, and semantic entity metadata remain
-deferred.
+workspace files and path-derived entity metadata. Reference/backlink display is limited to Validator's structured semantic reference
+index; semantic search, generated artifact discovery, supporting artifact
+discovery, and editing remain deferred. Diagram rendering is available for
+Generator-produced workflow Mermaid artifacts, and semantic-area display metadata
+is consumed only when Validator exposes it.
 
 ## Entity browser skeleton
 
@@ -244,12 +246,14 @@ becomes scope `semantic-areas` and identity `packet/protected_receive`. The
 entity browser recognizes `.yaml`, `.yml`, and `.json` files under known scope
 directories and ignores unknown directories plus non-model files.
 
-Semantic-area files are shown in the entity browser and existing raw Source view
-like any other path-derived source file. Explorer does not parse semantic-area
-YAML, read `workflows`, infer semantic areas from directories, resolve workflow
-references, validate forbidden fields, or synthesize semantic-area metadata.
-Semantic-area diagnostics must come from Validator diagnostics, and semantic-area
-relationships/backlinks must come from Validator `referenceIndex` output.
+Semantic-area files are shown in the entity browser and raw Source view like any
+other path-derived source file. When Validator exposes semantic-area entity data,
+Explorer displays its name, description, and directly listed `workflows[]`
+references in the Inspector. Explorer does not parse semantic-area YAML itself,
+infer semantic areas from directories, resolve workflow references, validate
+forbidden fields, or synthesize semantic-area metadata. Semantic-area diagnostics
+must come from Validator diagnostics, and semantic-area relationships/backlinks
+must come from Validator `referenceIndex` output.
 
 These identities are non-authoritative beyond the current workspace file
 structure. Explorer does not parse YAML or JSON contents for entity fields, generated artifacts, supporting artifacts, diagrams, or
@@ -281,6 +285,9 @@ Current behavior:
   current Generator SDK returns aggregate state-machine output rather than a
   per-state-machine artifact. Explorer therefore shows a clear Generator
   limitation message instead of parsing or splitting Mermaid itself.
+- The Diagrams activity lists workflow entities compactly. Selecting a workflow
+  opens its entity tab on the Diagram view and requests the workflow sequence
+  artifact through Generator.
 - Semantic-area entity tabs currently show a Generator-artifact limitation
   message. Semantic-area diagrams depend on Generator support for a
   `semantic-area-workflows:<semantic-area-id>` artifact (or a future equivalent
@@ -438,18 +445,16 @@ available from npm. For local development and CI, Explorer consumes the Validato
 repository directly as a pinned Git dependency:
 
 ```json
-"@behavioml/validator": "git+https://github.com/BehavioML/validator.git#3b65bfe365a583a992b56c3d3347ddecc8ff5bfa"
+"@behavioml/validator": "git+https://github.com/BehavioML/validator.git#56185a5e89cb9aabb9cdaf18671a45e5d905ffe5"
 ```
 
 The pinned commit is the current `main` revision inspected for this integration.
-It includes the public package metadata and workspace-provider API expected by
-the adapter: `InMemoryWorkspace` and `validateWorkspace`. The inspected pinned
-Validator does not list `semantic-areas` in its source scopes and does not yet
-provide semantic-area diagnostics, `SemanticArea.workflows[]` references in
-`referenceIndex`, or semantic-area forbidden-field validation for `kind`, `owns`,
-`model_refs`, or component reference fields. Explorer therefore only consumes
-such semantic-area Validator output when an updated Validator provides it; it does
-not duplicate those rules locally. Pinning a commit keeps Explorer installs
+It includes the public package metadata, workspace-provider API expected by the
+adapter (`InMemoryWorkspace` and `validateWorkspace`), semantic-area source scope
+loading, `SemanticArea.workflows[]` references in `referenceIndex`, and
+typed-reference support for `semantic-areas:<path>`. Explorer consumes that
+canonical output for summaries and backlinks; it does not duplicate
+semantic-area validation rules locally. Pinning a commit keeps Explorer installs
 reproducible while Validator remains unpublished; updating the pin should be a
 deliberate dependency-integration change.
 

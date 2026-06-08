@@ -56,3 +56,14 @@ test('contains source layout safeguards for long paths and large files', () => {
     /\.source-metadata-list code,[\s\S]*?\.selected-diagnostic-list code,[\s\S]*?\.missing-source code\s*{[^}]*overflow-wrap:\s*anywhere;[^}]*}/s,
   );
 });
+
+
+test('diagrams activity renders a compact workflow list rather than the placeholder', () => {
+  assert.match(appSource, /function DiagramsActivityPanel/);
+  assert.match(appSource, /const workflows = index\.entities\.filter\(\(entity\) => entity\.scope === 'workflows'\)/);
+  assert.match(appSource, /className=\{isSelected \? 'diagram-workflow-button diagram-workflow-button--selected' : 'diagram-workflow-button'\}/);
+  assert.doesNotMatch(
+    appSource,
+    /title="Diagrams"\s+message="Open a workflow entity tab and select Diagram to lazily request/s,
+  );
+});

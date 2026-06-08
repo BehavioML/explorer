@@ -28,6 +28,7 @@ import {
   type PathDerivedEntitySelection,
   type PathDerivedModelEntity,
   type SearchResult,
+  type EntitySummaryViewModel,
   type SelectedEntityDiagramViewModel,
   type SelectedEntityRelationshipsViewModel,
   type RelationshipNavigationSide,
@@ -275,6 +276,18 @@ export function App() {
     setWorkspaceDocumentState((state) => openEntityWorkspaceDocument(state, selection, 'source'));
   }
 
+  function handleDiagramWorkflowSelected(selection: PathDerivedEntitySelection) {
+    if (!selection) {
+      return;
+    }
+
+    setSelectedEntity(selection);
+    setSelectedDiagnostic(undefined);
+    setSelectedSearchResult(undefined);
+    setActiveActivity('diagrams');
+    setWorkspaceDocumentState((state) => openEntityWorkspaceDocument(state, selection, 'diagram'));
+  }
+
   function handleDiagnosticSelected(diagnostic: DiagnosticViewModel) {
     if (!entityIndex || !diagnostic.filePath) {
       return;
@@ -477,6 +490,7 @@ export function App() {
           selectedEntity={selectedEntity}
           selectedSearchResult={selectedSearchResult}
           validation={validation}
+          onSelectDiagramWorkflow={handleDiagramWorkflowSelected}
           workspaceOverview={workspaceOverview}
           onRelationshipTargetSelected={handleRelationshipTargetSelected}
           onSearchQueryChanged={handleSearchQueryChanged}
@@ -490,6 +504,7 @@ export function App() {
           onResize={resizeExplorerPanel}
         />
         <WorkspaceTabs
+          activeActivity={activeActivity}
           activeDocument={activeDocument}
           documents={workspaceDocumentState.documents}
           diagnostics={selectedDiagnostics}
@@ -521,6 +536,7 @@ export function App() {
           selectedSearchResult={selectedSearchResult}
           sourceView={sourceView}
           validation={validation}
+          diagramView={displayedDiagramView}
         />
       </div>
 
@@ -770,6 +786,7 @@ function ExplorerPanel({
   workspaceOverview,
   onRelationshipTargetSelected,
   onSearchQueryChanged,
+  onSelectDiagramWorkflow,
   onSearchResultSelected,
   onSelectActivity,
   onSelectEntity,
@@ -787,6 +804,7 @@ function ExplorerPanel({
     reference: SemanticReferenceViewModel,
     side: RelationshipNavigationSide,
   ) => void;
+  readonly onSelectDiagramWorkflow: (selection: PathDerivedEntitySelection) => void;
   readonly onSearchQueryChanged: (query: string) => void;
   readonly onSearchResultSelected: (result: SearchResult) => void;
   readonly onSelectActivity: (activity: ActivityMode) => void;
@@ -836,9 +854,11 @@ function ExplorerPanel({
       ) : null}
 
       {activeActivity === 'diagrams' ? (
-        <PlaceholderPanel
-          title="Diagrams"
-          message="Open a workflow entity tab and select Diagram to lazily request Generator-owned Mermaid artifacts, render them as SVG, and preserve source-map metadata for future navigation."
+        <DiagramsActivityPanel
+          index={index}
+          selectedEntity={selectedEntity}
+          workspaceOverview={workspaceOverview}
+          onSelectWorkflow={onSelectDiagramWorkflow}
         />
       ) : null}
 
@@ -852,7 +872,65 @@ function ExplorerPanel({
   );
 }
 
+
+function DiagramsActivityPanel({
+  index,
+  selectedEntity,
+  workspaceOverview,
+  onSelectWorkflow,
+}: {
+  readonly index: PathDerivedEntityIndex | undefined;
+  readonly selectedEntity: PathDerivedEntitySelection;
+  readonly workspaceOverview: WorkspaceOverviewViewModel | undefined;
+  readonly onSelectWorkflow: (selection: PathDerivedEntitySelection) => void;
+}) {
+  if (!workspaceOverview || !index) {
+    return <PlaceholderPanel title="Diagrams" message="Load a workspace to browse workflow sequence diagrams." />;
+  }
+
+  const workflows = index.entities.filter((entity) => entity.scope === 'workflows');
+
+  if (workflows.length === 0) {
+    return (
+      <PlaceholderPanel
+        title="Diagrams"
+        message="No workflow entities were found. Generator-backed sequence diagrams are available from workflow source files."
+      />
+    );
+  }
+
+  return (
+    <section className="diagrams-activity" aria-labelledby="diagrams-activity-title">
+      <div>
+        <h3 id="diagrams-activity-title">Workflow diagrams</h3>
+        <p>Select a workflow to request Generator-owned Mermaid and render it as SVG.</p>
+      </div>
+      <ul className="diagram-workflow-list" aria-label="Workflow diagram candidates">
+        {workflows.map((workflow) => {
+          const isSelected =
+            selectedEntity?.scope === workflow.scope && selectedEntity.identity === workflow.identity;
+
+          return (
+            <li key={`${workflow.scope}:${workflow.identity}`}>
+              <button
+                className={isSelected ? 'diagram-workflow-button diagram-workflow-button--selected' : 'diagram-workflow-button'}
+                type="button"
+                aria-pressed={isSelected}
+                onClick={() => onSelectWorkflow({ scope: workflow.scope, identity: workflow.identity })}
+              >
+                <span>{workflow.displayName}</span>
+                <code>{workflow.identity}</code>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 function WorkspaceTabs({
+  activeActivity,
   activeDocument,
   diagnostics,
   diagramView,
@@ -871,6 +949,7 @@ function WorkspaceTabs({
   onSelectDocument,
   onSelectEntityView,
 }: {
+  readonly activeActivity: ActivityMode;
   readonly activeDocument: WorkspaceDocument;
   readonly diagnostics: readonly DiagnosticViewModel[];
   readonly diagramView: SelectedEntityDiagramViewModel | undefined;
@@ -933,7 +1012,7 @@ function WorkspaceTabs({
       </div>
 
       <div className="workspace-content">
-        {activeDocument.kind === 'overview' ? (
+        {activeDocument.kind === 'overview' && activeActivity !== 'diagrams' ? (
           <WorkspaceOverviewPanel
             overview={workspaceOverview}
             entityIndex={entityIndex}
@@ -942,6 +1021,9 @@ function WorkspaceTabs({
             onOpenExplorer={() => onSelectActivity('explorer')}
             onOpenDiagrams={() => onSelectActivity('diagrams')}
           />
+        ) : null}
+        {activeDocument.kind === 'overview' && activeActivity === 'diagrams' ? (
+          <DiagramsLandingPanel entityIndex={entityIndex} />
         ) : null}
         {activeDocument.kind === 'entity' ? (
           <EntityDocumentWorkspace
@@ -958,6 +1040,29 @@ function WorkspaceTabs({
           />
         ) : null}
       </div>
+    </section>
+  );
+}
+
+
+function DiagramsLandingPanel({
+  entityIndex,
+}: {
+  readonly entityIndex: PathDerivedEntityIndex | undefined;
+}) {
+  const workflowCount = entityIndex?.entities.filter((entity) => entity.scope === 'workflows').length ?? 0;
+
+  return (
+    <section className="diagrams-landing" aria-labelledby="diagrams-landing-title">
+      <p className="eyebrow">Diagrams</p>
+      <h2 id="diagrams-landing-title">No workflow selected</h2>
+      <p>
+        Select a workflow from the Diagrams activity list to ask BehavioML Generator for a workflow
+        sequence Mermaid artifact and render it as SVG here.
+      </p>
+      <p className="overview-note">
+        {workflowCount} workflow diagram candidate{workflowCount === 1 ? '' : 's'} found in the loaded workspace.
+      </p>
     </section>
   );
 }
@@ -1287,6 +1392,8 @@ function DiagramDiagnostics({ diagnostics }: { readonly diagnostics: readonly Di
   );
 }
 
+let mermaidRenderSequence = 0;
+
 async function renderSelectedDiagramView(
   diagramView: SelectedEntityDiagramViewModel,
   cacheKey: string,
@@ -1297,7 +1404,10 @@ async function renderSelectedDiagramView(
     return diagramView;
   }
 
-  const result = await renderMermaidDiagram(artifact.content, { diagramId: `behavioml-${cacheKey}` });
+  mermaidRenderSequence += 1;
+  const result = await renderMermaidDiagram(artifact.content, {
+    diagramId: `behavioml-${cacheKey}-${mermaidRenderSequence.toString(36)}`,
+  });
 
   if (result.status === 'render_error') {
     return {
@@ -1317,6 +1427,7 @@ function createDiagramCacheKey(entity: Pick<PathDerivedModelEntity, 'scope' | 'i
 }
 
 function InspectorPanel({
+  diagramView,
   entity,
   relationships,
   selectedDiagnostic,
@@ -1325,6 +1436,7 @@ function InspectorPanel({
   sourceView,
   validation,
 }: {
+  readonly diagramView: SelectedEntityDiagramViewModel | undefined;
   readonly entity: PathDerivedModelEntity | undefined;
   readonly relationships: SelectedEntityRelationshipsViewModel | undefined;
   readonly selectedDiagnostic: DiagnosticSelection | undefined;
@@ -1339,7 +1451,12 @@ function InspectorPanel({
         <p className="eyebrow">Inspector</p>
         <h2>Inspector</h2>
       </div>
-      <SelectedEntitySummary entity={entity} diagnosticCount={selectedDiagnostics.length} />
+      <SelectedEntitySummary
+        entity={entity}
+        diagnosticCount={selectedDiagnostics.length}
+        entitySummary={findEntitySummary(validation?.entitySummaries, entity)}
+      />
+      <InspectorDiagramContext diagramView={diagramView} />
       <SourceMetadata sourceView={sourceView} />
       <SelectedDiagnosticContext selection={selectedDiagnostic} relationships={relationships} />
       <SelectedSearchMatchContext result={selectedSearchResult} />
@@ -1756,9 +1873,11 @@ function SearchPanel({
 function SelectedEntitySummary({
   entity,
   diagnosticCount,
+  entitySummary,
 }: {
   readonly entity: PathDerivedModelEntity | undefined;
   readonly diagnosticCount: number;
+  readonly entitySummary?: EntitySummaryViewModel;
 }) {
   if (!entity) {
     return (
@@ -1795,9 +1914,87 @@ function SelectedEntitySummary({
           <dt>Diagnostics for file</dt>
           <dd>{diagnosticCount}</dd>
         </div>
+        {entitySummary?.displayName ? (
+          <div>
+            <dt>Display name</dt>
+            <dd>{entitySummary.displayName}</dd>
+          </div>
+        ) : null}
+        {entitySummary?.description ? (
+          <div>
+            <dt>Description</dt>
+            <dd>{entitySummary.description}</dd>
+          </div>
+        ) : null}
+      </dl>
+      {entitySummary?.scope === 'semantic-areas' ? (
+        <div className="semantic-area-summary" aria-label="Semantic area workflow references">
+          <h4>Workflow references</h4>
+          {entitySummary.workflowReferences.length > 0 ? (
+            <ul>
+              {entitySummary.workflowReferences.map((workflow) => (
+                <li key={workflow}><code>{workflow}</code></li>
+              ))}
+            </ul>
+          ) : (
+            <p>No workflows are listed by this semantic area.</p>
+          )}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+
+function InspectorDiagramContext({
+  diagramView,
+}: {
+  readonly diagramView: SelectedEntityDiagramViewModel | undefined;
+}) {
+  const artifact = diagramView?.artifact;
+
+  if (!diagramView) {
+    return null;
+  }
+
+  return (
+    <section className="inspector-diagram-context" aria-label="Diagram artifact context">
+      <p className="eyebrow">Diagram artifact</p>
+      <dl className="entity-summary-list">
+        <div>
+          <dt>Status</dt>
+          <dd>{diagramView.status}</dd>
+        </div>
+        {artifact ? (
+          <>
+            <div>
+              <dt>Kind</dt>
+              <dd>{artifact.kind}</dd>
+            </div>
+            <div>
+              <dt>Format</dt>
+              <dd>{artifact.format}</dd>
+            </div>
+            <div>
+              <dt>Source map</dt>
+              <dd>{artifact.sourceMap === undefined ? 'Not provided' : formatSourceMapSummary(artifact.sourceMap)}</dd>
+            </div>
+          </>
+        ) : null}
       </dl>
     </section>
   );
+}
+
+function findEntitySummary(
+  summaries: readonly EntitySummaryViewModel[] | undefined,
+  entity: PathDerivedModelEntity | undefined,
+): EntitySummaryViewModel | undefined {
+  if (!summaries || !entity) {
+    return undefined;
+  }
+
+  return summaries.find((summary) => summary.scope === entity.scope && summary.identity === entity.identity);
 }
 
 function SourcePanel({

@@ -215,6 +215,20 @@ test('semantic-area entity reports generator artifact limitation without calling
   assert.match(diagram.message, /does not generate semantic-area Mermaid locally/);
 });
 
+
+test('generator failures become adapter-error diagram states for selected workflows', async () => {
+  const diagram = await generateDiagramArtifactForEntity(files, workflowEntity, {
+    moduleLoader: async () => ({
+      generateWorkspaceArtifacts: () => {
+        throw new Error('generator failed');
+      },
+    }),
+  });
+
+  assert.equal(diagram.status, 'adapter_error');
+  assert.match(diagram.message, /Generator is not available/);
+});
+
 test('malformed generator artifact collections are adapter errors', async () => {
   const result = await generateDiagramArtifactsForWorkspace(files, {
     moduleLoader: async () => ({

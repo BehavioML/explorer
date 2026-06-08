@@ -111,6 +111,33 @@ test('handles source matches with no corresponding path-derived entity', () => {
   ]);
 });
 
+
+test('finds semantic areas by path and raw workflow reference text', () => {
+  const files = [
+    file(
+      'semantic-areas/packet/protected_receive.yaml',
+      'name: Protected receive\ndescription: Packet receive behavior\nworkflows:\n  - packet/receive',
+    ),
+  ];
+  const entityIndex = createPathDerivedEntityIndex(files);
+
+  assert.deepEqual(searchWorkspace({ files, entityIndex, query: 'protected_receive' })[0].entityKey, {
+    scope: 'semantic-areas',
+    identity: 'packet/protected_receive',
+  });
+  assert.deepEqual(searchWorkspace({ files, entityIndex, query: 'packet/receive' })[0], {
+    kind: 'source_match',
+    entityKey: { scope: 'semantic-areas', identity: 'packet/protected_receive' },
+    scope: 'semantic-areas',
+    identity: 'packet/protected_receive',
+    filePath: 'semantic-areas/packet/protected_receive.yaml',
+    label: 'protected_receive',
+    matchText: '  - packet/receive',
+    lineNumber: 4,
+    lineText: '  - packet/receive',
+  });
+});
+
 function workspaceFixture(): {
   readonly files: readonly WorkspaceFileEntry[];
   readonly entityIndex: ReturnType<typeof createPathDerivedEntityIndex>;

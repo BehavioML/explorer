@@ -39,9 +39,11 @@ export {
 export type {
   DiagnosticNavigationStatus,
   DiagnosticSelection,
+  EntitySummaryViewModel,
   DiagnosticSeverity,
   DiagnosticViewModel,
   ValidationResultViewModel,
+  SemanticAreaEntitySummaryViewModel,
 } from './diagnostics';
 export { createSourceFileView, findSourceFileForEntity } from './sourceFileView';
 export { normalizeSearchQuery, searchWorkspace } from './search';

@@ -1422,3 +1422,69 @@ html { font-size: 15px; }
   .diagnostics-status-bar { flex-wrap: wrap; min-height: 36px; padding-block: 0.35rem; white-space: normal; }
   .diagnostics-status-counts { margin-left: 0; }
 }
+
+.diagrams-activity {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  min-width: 0;
+}
+
+.diagrams-activity h3,
+.semantic-area-summary h4 { margin: 0; font-size: 0.9rem; }
+.diagrams-activity p,
+.semantic-area-summary p { margin: 0; color: var(--color-text-muted); font-size: 0.82rem; }
+
+.diagram-workflow-list,
+.semantic-area-summary ul {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.diagram-workflow-button {
+  display: grid;
+  gap: 0.16rem;
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  color: var(--color-text);
+  background: transparent;
+  cursor: pointer;
+}
+
+.diagram-workflow-button:hover,
+.diagram-workflow-button:focus-visible,
+.diagram-workflow-button--selected {
+  border-color: var(--color-border-strong);
+  background: #fff;
+}
+
+.diagram-workflow-button--selected { box-shadow: inset 3px 0 0 var(--color-accent); }
+.diagram-workflow-button span { font-weight: 800; overflow-wrap: anywhere; }
+.diagram-workflow-button code { color: var(--color-text-muted); font-size: 0.72rem; }
+
+.semantic-area-summary,
+.inspector-diagram-context {
+  display: grid;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+}
+
+.semantic-area-summary code { overflow-wrap: anywhere; }
+.inspector-diagram-context { padding: var(--space-3); }
+
+.diagrams-landing {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  min-height: 100%;
+  padding: var(--space-5);
+}
+
+.diagrams-landing h2,
+.diagrams-landing p { margin: 0; }

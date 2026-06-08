@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@behavioml/generator": "git+https://github.com/BehavioML/generator.git#bfecb030922691c2c4b0629b39e0d0e393cb03e1",
-    "@behavioml/validator": "git+https://github.com/BehavioML/validator.git#3b65bfe365a583a992b56c3d3347ddecc8ff5bfa",
+    "@behavioml/validator": "git+https://github.com/BehavioML/validator.git#56185a5e89cb9aabb9cdaf18671a45e5d905ffe5",
     "fflate": "^0.8.3",
     "mermaid": "^11.15.0",
     "path-browserify": "^1.0.1",

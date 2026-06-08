@@ -58,10 +58,15 @@ test('contains source layout safeguards for long paths and large files', () => {
 });
 
 
-test('diagrams activity renders a compact workflow list rather than the placeholder', () => {
+test('diagrams and explorer share the compact entity workflow row pattern', () => {
   assert.match(appSource, /function DiagramsActivityPanel/);
+  assert.match(appSource, /function CompactEntityRowButton/);
   assert.match(appSource, /const workflows = index\.entities\.filter\(\(entity\) => entity\.scope === 'workflows'\)/);
-  assert.match(appSource, /className=\{isSelected \? 'diagram-workflow-button diagram-workflow-button--selected' : 'diagram-workflow-button'\}/);
+  assert.match(appSource, /className="compact-entity-list diagram-workflow-list"/);
+  assert.match(appSource, /className="compact-entity-list"/);
+  assert.match(appSource, /className="diagram-workflow-button"/);
+  assert.match(appSource, /className="entity-button"/);
+  assert.match(stylesSource, /\.compact-entity-button\s*\{[^}]*border-bottom:\s*1px solid var\(--color-border\);[^}]*border-radius:\s*0;[^}]*background:\s*transparent;[^}]*}/s);
   assert.doesNotMatch(
     appSource,
     /title="Diagrams"\s+message="Open a workflow entity tab and select Diagram to lazily request/s,

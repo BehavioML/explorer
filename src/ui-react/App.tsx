@@ -905,22 +905,20 @@ function DiagramsActivityPanel({
         <h3 id="diagrams-activity-title">Workflow diagrams</h3>
         <p>Select a workflow to request Generator-owned Mermaid and render it as SVG.</p>
       </div>
-      <ul className="diagram-workflow-list" aria-label="Workflow diagram candidates">
+      <ul className="compact-entity-list diagram-workflow-list" aria-label="Workflow diagram candidates">
         {workflows.map((workflow) => {
           const isSelected =
             selectedEntity?.scope === workflow.scope && selectedEntity.identity === workflow.identity;
 
           return (
             <li key={`${workflow.scope}:${workflow.identity}`}>
-              <button
-                className={isSelected ? 'diagram-workflow-button diagram-workflow-button--selected' : 'diagram-workflow-button'}
-                type="button"
-                aria-pressed={isSelected}
-                onClick={() => onSelectWorkflow({ scope: workflow.scope, identity: workflow.identity })}
-              >
-                <span>{workflow.displayName}</span>
-                <code>{workflow.identity}</code>
-              </button>
+              <CompactEntityRowButton
+                entity={workflow}
+                isSelected={isSelected}
+                className="diagram-workflow-button"
+                selectedClassName="diagram-workflow-button--selected"
+                onSelect={onSelectWorkflow}
+              />
             </li>
           );
         })}
@@ -1760,22 +1758,20 @@ function EntityScopeList({
           </h3>
 
           {scopeGroup.entities.length > 0 ? (
-            <ul>
+            <ul className="compact-entity-list">
               {scopeGroup.entities.map((entity) => {
                 const isSelected =
                   selectedEntity?.scope === entity.scope && selectedEntity.identity === entity.identity;
 
                 return (
                   <li key={`${entity.scope}:${entity.identity}`}>
-                    <button
-                      className={isSelected ? 'entity-button entity-button--selected' : 'entity-button'}
-                      type="button"
-                      aria-pressed={isSelected}
-                      onClick={() => onSelectEntity({ scope: entity.scope, identity: entity.identity })}
-                    >
-                      <span>{entity.displayName}</span>
-                      <code>{entity.identity}</code>
-                    </button>
+                    <CompactEntityRowButton
+                      entity={entity}
+                      isSelected={isSelected}
+                      className="entity-button"
+                      selectedClassName="entity-button--selected"
+                      onSelect={onSelectEntity}
+                    />
                   </li>
                 );
               })}
@@ -1786,6 +1782,36 @@ function EntityScopeList({
         </section>
       ))}
     </div>
+  );
+}
+
+function CompactEntityRowButton({
+  entity,
+  isSelected,
+  className,
+  selectedClassName,
+  onSelect,
+}: {
+  readonly entity: PathDerivedModelEntity;
+  readonly isSelected: boolean;
+  readonly className: string;
+  readonly selectedClassName: string;
+  readonly onSelect: (selection: PathDerivedEntitySelection) => void;
+}) {
+  const buttonClassName = isSelected
+    ? `compact-entity-button compact-entity-button--selected ${className} ${selectedClassName}`
+    : `compact-entity-button ${className}`;
+
+  return (
+    <button
+      className={buttonClassName}
+      type="button"
+      aria-pressed={isSelected}
+      onClick={() => onSelect({ scope: entity.scope, identity: entity.identity })}
+    >
+      <span>{entity.displayName}</span>
+      <code>{entity.identity}</code>
+    </button>
   );
 }
 

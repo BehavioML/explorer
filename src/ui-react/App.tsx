@@ -69,9 +69,37 @@ const activityItems: readonly {
   { id: 'relationships', label: 'Relationships' },
 ];
 
+type ModelElementCategory =
+  | 'workflows'
+  | 'capabilities'
+  | 'decisions'
+  | 'events'
+  | 'roles'
+  | 'interfaces'
+  | 'components'
+  | 'modules'
+  | 'entities'
+  | 'state-machines';
+
+const modelElementCategories: readonly {
+  readonly id: ModelElementCategory;
+  readonly label: string;
+}[] = [
+  { id: 'workflows', label: 'Workflows' },
+  { id: 'capabilities', label: 'Capabilities' },
+  { id: 'decisions', label: 'Decisions' },
+  { id: 'events', label: 'Events' },
+  { id: 'roles', label: 'Roles' },
+  { id: 'interfaces', label: 'Interfaces' },
+  { id: 'components', label: 'Components' },
+  { id: 'modules', label: 'Modules' },
+  { id: 'entities', label: 'Entities' },
+  { id: 'state-machines', label: 'State Machines' },
+];
+
 const layoutConstraints = {
-  explorerMin: 220,
-  explorerMax: 420,
+  explorerMin: 240,
+  explorerMax: 440,
   inspectorMin: 240,
   inspectorMax: 460,
   diagnosticsMin: 32,
@@ -99,10 +127,11 @@ export function App() {
   const [selectedSearchResult, setSelectedSearchResult] = useState<SearchResult>();
   const [searchText, setSearchText] = useState('');
   const [activeActivity, setActiveActivity] = useState<ActivityMode>('explorer');
+  const [activeModelCategory, setActiveModelCategory] = useState<ModelElementCategory>('workflows');
   const [workspaceDocumentState, setWorkspaceDocumentState] = useState(createInitialWorkspaceDocumentState);
   const [diagramCache, setDiagramCache] = useState<Record<string, SelectedEntityDiagramViewModel>>({});
   const [layoutSizes, setLayoutSizes] = useState<WorkbenchLayoutSizes>({
-    explorerWidth: 288,
+    explorerWidth: 320,
     inspectorWidth: 320,
     diagnosticsHeight: layoutConstraints.diagnosticsMin,
   });
@@ -470,17 +499,21 @@ export function App() {
       aria-label="BehavioML Explorer workbench"
     >
       <TopBar
+        activeActivity={activeActivity}
         searchText={searchText}
         status={status}
-        validation={validation}
         workspaceOverview={workspaceOverview}
         onArchiveSelected={handleArchiveSelected}
         onExampleSelected={handleExampleSelected}
         onSearchChange={handleSearchQueryChanged}
+        onSelectActivity={setActiveActivity}
       />
 
       <div className="workbench-body">
-        <ActivityBar activeActivity={activeActivity} onSelectActivity={setActiveActivity} />
+        <ModelElementRail
+          activeCategory={activeModelCategory}
+          onSelectCategory={setActiveModelCategory}
+        />
         <ExplorerPanel
           activeActivity={activeActivity}
           index={entityIndex}
@@ -546,6 +579,7 @@ export function App() {
         selectedDiagnostic={selectedDiagnostic}
         status={status}
         validation={validation}
+        workspaceOverview={workspaceOverview}
         onResize={resizeDiagnosticsPanel}
         onSelectDiagnostic={handleDiagnosticSelected}
         onToggleExpanded={toggleDiagnosticsExpanded}
@@ -612,7 +646,7 @@ function ActivityIcon({ activity }: { readonly activity: ActivityMode }) {
         <path d="M4 5.5h6l1.5 2H20v11H4zM4 8h16" />
       ) : null}
       {activity === 'search' ? (
-        <path d="M10.5 17a6.5 6.5 0 1 1 4.6-1.9L20 20M10.5 6.5v8M6.5 10.5h8" />
+        <path d="M10.5 17a6.5 6.5 0 1 1 4.6-1.9L20 20" />
       ) : null}
       {activity === 'validation' ? (
         <path d="M12 3.5 19 7v5.5c0 3.6-2.6 6.6-7 8-4.4-1.4-7-4.4-7-8V7zM8.5 12l2.2 2.2 4.8-5" />
@@ -627,25 +661,47 @@ function ActivityIcon({ activity }: { readonly activity: ActivityMode }) {
   );
 }
 
+function ModelElementIcon({
+  category,
+}: {
+  readonly category: ModelElementCategory | 'menu';
+}) {
+  return (
+    <svg className="model-element-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      {category === 'menu' ? <path d="M4 7h16M4 12h16M4 17h16" /> : null}
+      {category === 'workflows' ? <path d="M6 6h4v4H6zM14 14h4v4h-4zM10 8h2.5A3.5 3.5 0 0 1 16 11.5V14" /> : null}
+      {category === 'capabilities' ? <path d="M12 4v3M12 17v3M4 12h3M17 12h3M8.5 8.5 6.4 6.4M15.5 15.5l2.1 2.1M15.5 8.5l2.1-2.1M8.5 15.5l-2.1 2.1M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0" /> : null}
+      {category === 'decisions' ? <path d="m12 4 8 8-8 8-8-8z" /> : null}
+      {category === 'events' ? <path d="M6 5.5h12v13H6zM8.5 3.5v4M15.5 3.5v4M6 9h12M13 11l-2 3h3l-2 3" /> : null}
+      {category === 'roles' ? <path d="M8.5 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM3.5 19a5 5 0 0 1 10 0M16 11.5a2.5 2.5 0 1 0 0-5M15 15a4.5 4.5 0 0 1 5.5 4" /> : null}
+      {category === 'interfaces' ? <path d="M8 4v5M16 4v5M7 9h10v3a5 5 0 0 1-10 0zM12 17v3" /> : null}
+      {category === 'components' ? <path d="m12 3.8 7 4v8.4l-7 4-7-4V7.8zM5 8l7 4 7-4M12 12v8" /> : null}
+      {category === 'modules' ? <path d="m12 4 8 4-8 4-8-4zM4 12l8 4 8-4M4 16l8 4 8-4" /> : null}
+      {category === 'entities' ? <path d="M5 7c0-1.7 3.1-3 7-3s7 1.3 7 3-3.1 3-7 3-7-1.3-7-3zM5 7v5c0 1.7 3.1 3 7 3s7-1.3 7-3V7M5 12v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5" /> : null}
+      {category === 'state-machines' ? <path d="M7 7a3 3 0 1 0 0.1 0M17 7a3 3 0 1 0 0.1 0M12 17a3 3 0 1 0 0.1 0M9.8 7h4.4M8.7 9.5l2 5M15.3 9.5l-2 5" /> : null}
+    </svg>
+  );
+}
+
 function TopBar({
+  activeActivity,
   searchText,
   status,
-  validation,
   workspaceOverview,
   onArchiveSelected,
   onExampleSelected,
   onSearchChange,
+  onSelectActivity,
 }: {
+  readonly activeActivity: ActivityMode;
   readonly searchText: string;
   readonly status: Status;
-  readonly validation: ValidationResultViewModel | undefined;
   readonly workspaceOverview: WorkspaceOverviewViewModel | undefined;
   readonly onArchiveSelected: (file: File | undefined) => void;
   readonly onExampleSelected: (exampleId: CanonicalExampleId) => void;
   readonly onSearchChange: (query: string) => void;
+  readonly onSelectActivity: (activity: ActivityMode) => void;
 }) {
-  const summary = validation ? summarizeDiagnosticSeverities(validation.diagnostics) : workspaceOverview?.diagnosticSummary;
-
   return (
     <header className="top-bar">
       <div className="brand-lockup" aria-label="Application identity">
@@ -658,24 +714,7 @@ function TopBar({
         </div>
       </div>
 
-      <div className="top-bar-meta" aria-label="Loaded workspace metadata">
-        <span title={workspaceOverview?.modelRoot}>Root: {workspaceOverview?.modelRoot ?? '—'}</span>
-      </div>
-
-      <div className="top-bar-status" aria-live="polite">
-        <span className={`status-dot status-dot--${status.kind}`} aria-hidden="true" />
-        <span className={`status-pill status-pill--${workspaceOverview?.validationStatus ?? status.kind}`}>
-          {workspaceOverview ? formatValidationStatus(workspaceOverview.validationStatus) : status.kind}
-        </span>
-        {summary ? (
-          <span className="diagnostic-counts">
-            <strong className="diagnostic-count diagnostic-count--error">{summary.errors}</strong> errors
-            <strong className="diagnostic-count diagnostic-count--warning">{summary.warnings}</strong> warnings
-          </span>
-        ) : (
-          <span>{formatTopBarStatus(status, validation)}</span>
-        )}
-      </div>
+      <TopActivityNav activeActivity={activeActivity} onSelectActivity={onSelectActivity} />
 
       <label className="top-search">
         <span className="visually-hidden">Search loaded workspace</span>
@@ -745,7 +784,7 @@ function ExampleLoader({
   );
 }
 
-function ActivityBar({
+function TopActivityNav({
   activeActivity,
   onSelectActivity,
 }: {
@@ -753,11 +792,11 @@ function ActivityBar({
   readonly onSelectActivity: (activity: ActivityMode) => void;
 }) {
   return (
-    <nav className="activity-bar" aria-label="Workbench activity bar">
+    <nav className="top-activity-nav" aria-label="Global explorer views">
       {activityItems.map((item) => (
         <button
           className={
-            activeActivity === item.id ? 'activity-button activity-button--active' : 'activity-button'
+            activeActivity === item.id ? 'top-activity-button top-activity-button--active' : 'top-activity-button'
           }
           type="button"
           aria-label={item.label}
@@ -770,6 +809,48 @@ function ActivityBar({
           <span className="visually-hidden">{item.label}</span>
         </button>
       ))}
+    </nav>
+  );
+}
+
+function ModelElementRail({
+  activeCategory,
+  onSelectCategory,
+}: {
+  readonly activeCategory: ModelElementCategory;
+  readonly onSelectCategory: (category: ModelElementCategory) => void;
+}) {
+  return (
+    <nav className="model-element-rail" aria-label="Model element categories">
+      <button
+        className="model-rail-menu-button"
+        type="button"
+        aria-label="Model navigation menu"
+        aria-expanded="false"
+        title="Model navigation"
+      >
+        <ModelElementIcon category="menu" />
+      </button>
+      <div className="model-rail-category-list" role="list">
+        {modelElementCategories.map((category) => (
+          <button
+            className={
+              activeCategory === category.id
+                ? 'model-rail-button model-rail-button--active'
+                : 'model-rail-button'
+            }
+            type="button"
+            aria-label={category.label}
+            aria-pressed={activeCategory === category.id}
+            title={category.label}
+            key={category.id}
+            onClick={() => onSelectCategory(category.id)}
+          >
+            <ModelElementIcon category={category.id} />
+            <span className="visually-hidden">{category.label}</span>
+          </button>
+        ))}
+      </div>
     </nav>
   );
 }
@@ -1470,6 +1551,7 @@ function DiagnosticsPanel({
   selectedDiagnostic,
   status,
   validation,
+  workspaceOverview,
   onResize,
   onSelectDiagnostic,
   onToggleExpanded,
@@ -1479,6 +1561,7 @@ function DiagnosticsPanel({
   readonly selectedDiagnostic: DiagnosticSelection | undefined;
   readonly status: Status;
   readonly validation: ValidationResultViewModel | undefined;
+  readonly workspaceOverview: WorkspaceOverviewViewModel | undefined;
   readonly onResize: (delta: number) => void;
   readonly onSelectDiagnostic: (diagnostic: DiagnosticViewModel) => void;
   readonly onToggleExpanded: () => void;
@@ -1486,7 +1569,10 @@ function DiagnosticsPanel({
   const summary = validation ? summarizeDiagnosticSeverities(validation.diagnostics) : undefined;
   const statusMessage = summary && validation
     ? formatCompactDiagnosticsStatus(summary, validation)
-    : 'Diagnostics will appear here after validation completes.';
+    : status.kind === 'loading'
+      ? status.message
+      : 'Diagnostics will appear here after validation completes.';
+  const rootLabel = workspaceOverview?.modelRoot ?? 'No workspace loaded';
 
   return (
     <section className="bottom-diagnostics" aria-label="Diagnostics panel">
@@ -1497,15 +1583,18 @@ function DiagnosticsPanel({
         onResize={onResize}
       />
       <div className="diagnostics-status-bar" aria-live="polite">
-        <strong>Diagnostics</strong>
+        <span className="diagnostics-root" title={rootLabel}>
+          <svg className="diagnostics-root-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M3.5 6.5h6l1.5 2h9.5v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18V8a1.5 1.5 0 0 1 .5-1.5z" />
+          </svg>
+          <span>Root (workspace): {rootLabel}</span>
+        </span>
         <span className="diagnostics-status-message">{statusMessage}</span>
-        {summary ? (
-          <span className="diagnostics-status-counts" aria-label="Validation diagnostic counts">
-            <span className="diagnostics-count diagnostics-count--error">Errors {summary.errors}</span>
-            <span className="diagnostics-count diagnostics-count--warning">Warnings {summary.warnings}</span>
-            <span className="diagnostics-count diagnostics-count--info">Info {summary.other}</span>
-          </span>
-        ) : null}
+        <span className="diagnostics-status-counts" aria-label="Validation diagnostic counts">
+          <span className={summary && summary.errors > 0 ? 'diagnostics-count diagnostics-count--error diagnostics-count--active' : 'diagnostics-count diagnostics-count--error'}>{summary?.errors ?? 0} errors</span>
+          <span className={summary && summary.warnings > 0 ? 'diagnostics-count diagnostics-count--warning diagnostics-count--active' : 'diagnostics-count diagnostics-count--warning'}>{summary?.warnings ?? 0} warnings</span>
+          <span className={summary && summary.other > 0 ? 'diagnostics-count diagnostics-count--info diagnostics-count--active' : 'diagnostics-count diagnostics-count--info'}>{summary?.other ?? 0} info</span>
+        </span>
         <button
           className="diagnostics-toggle"
           type="button"
@@ -2575,20 +2664,6 @@ function formatValidationStatus(status: WorkspaceOverviewValidationStatus): stri
     case 'validation_unavailable':
       return 'Validation unavailable';
   }
-}
-
-function formatTopBarStatus(
-  status: Status,
-  validation: ValidationResultViewModel | undefined,
-): string {
-  if (validation) {
-    const summary = summarizeDiagnosticSeverities(validation.diagnostics);
-    return validation.ok
-      ? 'Health: 0 errors'
-      : `Health: ${summary.errors} errors, ${summary.warnings} warnings`;
-  }
-
-  return status.message;
 }
 
 function clampSize(value: number, min: number, max: number): number {

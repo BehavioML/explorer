@@ -706,7 +706,7 @@ function TopBar({
     <header className="top-bar">
       <div className="brand-lockup" aria-label="Application identity">
         <span className="app-icon" aria-hidden="true">
-          <img src="/icon.png" alt="" />
+          <img src="icon.png" alt="" />
         </span>
         <div>
           <strong>BehavioML Explorer</strong>

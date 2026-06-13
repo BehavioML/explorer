@@ -19,6 +19,7 @@ export interface GenerateDiagramArtifactsForWorkspaceOptions {
   readonly formats?: readonly string[];
   readonly workflow?: string;
   readonly expandUses?: 'one-level' | 'recursive' | 'none' | boolean;
+  readonly workflowComposition?: 'collapsed' | 'expanded';
   readonly moduleLoader?: () => Promise<GeneratorModuleLike>;
 }
 
@@ -41,6 +42,7 @@ interface GeneratorModuleLike {
       readonly formats?: readonly string[];
       readonly workflow?: string;
       readonly expandUses?: 'one-level' | 'recursive' | 'none' | boolean;
+      readonly workflowComposition?: 'collapsed' | 'expanded';
     },
   ) => Promise<readonly unknown[]> | readonly unknown[];
 }
@@ -236,7 +238,7 @@ async function loadGeneratorModule(
 
   // Keep generated-artifact semantics behind this deferred adapter import so
   // Generator remains isolated from core and UI layers while Explorer consumes
-  // the pinned Git dependency from in-memory workspace files.
+  // the Git dependency from in-memory workspace files.
   return import('@behavioml/generator') satisfies Promise<GeneratorModule>;
 }
 

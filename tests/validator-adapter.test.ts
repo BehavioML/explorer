@@ -58,3 +58,67 @@ test('validator adapter exposes semantic-area summaries and accepts semantic-are
     true,
   );
 });
+
+test('validator adapter accepts aggregated workflow reference steps through canonical Validator', async () => {
+  const result = await validateInMemoryModelWorkspace(aggregatedWorkflowFiles);
+
+  assert.equal(result.status, 'validated');
+  if (result.status !== 'validated') {
+    return;
+  }
+
+  assert.equal(result.validation.ok, true);
+  assert.deepEqual(result.validation.diagnostics, []);
+  assert.equal(
+    result.validation.referenceIndex?.outgoingReferences.some(
+      (reference) =>
+        reference.source.scope === 'workflows' &&
+        reference.source.identity === 'aggregate/checkout' &&
+        reference.fieldPath === 'steps[0].workflow' &&
+        reference.targetScope === 'workflows' &&
+        reference.targetIdentity === 'checkout/collect_payment' &&
+        reference.resolved,
+    ),
+    true,
+  );
+});
+
+const aggregatedWorkflowFiles: readonly WorkspaceFileEntry[] = [
+  {
+    path: 'workflows/aggregate/checkout.yaml',
+    content: [
+      'name: Aggregate checkout',
+      'roles:',
+      '  primary: shopper',
+      '  participants:',
+      '    - payment_gateway',
+      'steps:',
+      '  - workflow: workflows/checkout/collect_payment',
+      '    bind:',
+      '      buyer: shopper',
+      '      processor: payment_gateway',
+      '',
+    ].join('\n'),
+  },
+  {
+    path: 'workflows/checkout/collect_payment.yaml',
+    content: [
+      'name: Collect payment',
+      'roles:',
+      '  primary: buyer',
+      '  participants:',
+      '    - processor',
+      'steps:',
+      '  - from: buyer',
+      '    to: processor',
+      '    capability: checkout/submit_payment',
+      '    label: Submit payment',
+      '',
+    ].join('\n'),
+  },
+  { path: 'roles/shopper.yaml', content: 'description: Checkout shopper.\n' },
+  { path: 'roles/payment_gateway.yaml', content: 'description: Payment gateway.\n' },
+  { path: 'roles/buyer.yaml', content: 'description: Generic buyer.\n' },
+  { path: 'roles/processor.yaml', content: 'description: Generic payment processor.\n' },
+  { path: 'capabilities/checkout/submit_payment.yaml', content: 'description: Submit payment.\n' },
+];

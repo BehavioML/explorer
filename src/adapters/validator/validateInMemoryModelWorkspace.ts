@@ -114,8 +114,8 @@ function toAdapterError(cause: unknown): ValidatorAdapterResult {
 
 async function loadValidatorModule(): Promise<ValidatorModule> {
   // Keep the semantic engine behind this deferred adapter import so Validator
-  // remains isolated from core and UI layers while the package is consumed from
-  // the pinned Git dependency declared by Explorer.
+  // remains isolated from core and UI layers while Explorer consumes the
+  // canonical Git dependency declared by Explorer.
   return import('@behavioml/validator');
 }
 

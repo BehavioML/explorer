@@ -27,6 +27,7 @@ import {
   type PathDerivedEntityIndex,
   type PathDerivedEntitySelection,
   type PathDerivedModelEntity,
+  type ModelEntityScope,
   type SearchResult,
   type EntitySummaryViewModel,
   type SelectedEntityDiagramViewModel,
@@ -70,6 +71,7 @@ const activityItems: readonly {
 ];
 
 type ModelElementCategory =
+  | 'overview'
   | 'workflows'
   | 'capabilities'
   | 'decisions'
@@ -78,23 +80,27 @@ type ModelElementCategory =
   | 'interfaces'
   | 'components'
   | 'modules'
+  | 'semantic-areas'
   | 'entities'
   | 'state-machines';
 
 const modelElementCategories: readonly {
   readonly id: ModelElementCategory;
   readonly label: string;
+  readonly scope?: ModelEntityScope;
 }[] = [
-  { id: 'workflows', label: 'Workflows' },
-  { id: 'capabilities', label: 'Capabilities' },
-  { id: 'decisions', label: 'Decisions' },
-  { id: 'events', label: 'Events' },
-  { id: 'roles', label: 'Roles' },
-  { id: 'interfaces', label: 'Interfaces' },
-  { id: 'components', label: 'Components' },
-  { id: 'modules', label: 'Modules' },
-  { id: 'entities', label: 'Entities' },
-  { id: 'state-machines', label: 'State Machines' },
+  { id: 'overview', label: 'Overview' },
+  { id: 'workflows', label: 'Workflows', scope: 'workflows' },
+  { id: 'roles', label: 'Roles', scope: 'roles' },
+  { id: 'capabilities', label: 'Capabilities', scope: 'capabilities' },
+  { id: 'interfaces', label: 'Interfaces', scope: 'interfaces' },
+  { id: 'components', label: 'Components', scope: 'components' },
+  { id: 'modules', label: 'Modules', scope: 'modules' },
+  { id: 'semantic-areas', label: 'Semantic Areas', scope: 'semantic-areas' },
+  { id: 'events', label: 'Events', scope: 'events' },
+  { id: 'entities', label: 'Entities', scope: 'entities' },
+  { id: 'state-machines', label: 'State Machines', scope: 'state-machines' },
+  { id: 'decisions', label: 'Decisions', scope: 'decisions' },
 ];
 
 const layoutConstraints = {
@@ -127,7 +133,8 @@ export function App() {
   const [selectedSearchResult, setSelectedSearchResult] = useState<SearchResult>();
   const [searchText, setSearchText] = useState('');
   const [activeActivity, setActiveActivity] = useState<ActivityMode>('explorer');
-  const [activeModelCategory, setActiveModelCategory] = useState<ModelElementCategory>('workflows');
+  const [activeModelCategory, setActiveModelCategory] = useState<ModelElementCategory>('overview');
+  const [isModelRailExpanded, setModelRailExpanded] = useState(false);
   const [workspaceDocumentState, setWorkspaceDocumentState] = useState(createInitialWorkspaceDocumentState);
   const [diagramCache, setDiagramCache] = useState<Record<string, SelectedEntityDiagramViewModel>>({});
   const [layoutSizes, setLayoutSizes] = useState<WorkbenchLayoutSizes>({
@@ -490,6 +497,7 @@ export function App() {
     '--explorer-width': `${layoutSizes.explorerWidth}px`,
     '--inspector-width': `${layoutSizes.inspectorWidth}px`,
     '--diagnostics-height': `${isDiagnosticsExpanded ? layoutSizes.diagnosticsHeight : layoutConstraints.diagnosticsMin}px`,
+    '--rail-width': isModelRailExpanded ? '200px' : '48px',
   } as CSSProperties;
 
   return (
@@ -512,10 +520,14 @@ export function App() {
       <div className="workbench-body">
         <ModelElementRail
           activeCategory={activeModelCategory}
+          index={entityIndex}
+          isExpanded={isModelRailExpanded}
           onSelectCategory={setActiveModelCategory}
+          onToggleExpanded={() => setModelRailExpanded((expanded) => !expanded)}
         />
         <ExplorerPanel
           activeActivity={activeActivity}
+          activeModelCategory={activeModelCategory}
           index={entityIndex}
           relationships={selectedRelationships}
           searchResults={searchResults}
@@ -669,6 +681,7 @@ function ModelElementIcon({
   return (
     <svg className="model-element-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       {category === 'menu' ? <path d="M4 7h16M4 12h16M4 17h16" /> : null}
+      {category === 'overview' ? <path d="M4 5.5h6l1.5 2H20v11H4zM4 8h16" /> : null}
       {category === 'workflows' ? <path d="M6 6h4v4H6zM14 14h4v4h-4zM10 8h2.5A3.5 3.5 0 0 1 16 11.5V14" /> : null}
       {category === 'capabilities' ? <path d="M12 4v3M12 17v3M4 12h3M17 12h3M8.5 8.5 6.4 6.4M15.5 15.5l2.1 2.1M15.5 8.5l2.1-2.1M8.5 15.5l-2.1 2.1M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0" /> : null}
       {category === 'decisions' ? <path d="m12 4 8 8-8 8-8-8z" /> : null}
@@ -677,6 +690,7 @@ function ModelElementIcon({
       {category === 'interfaces' ? <path d="M8 4v5M16 4v5M7 9h10v3a5 5 0 0 1-10 0zM12 17v3" /> : null}
       {category === 'components' ? <path d="m12 3.8 7 4v8.4l-7 4-7-4V7.8zM5 8l7 4 7-4M12 12v8" /> : null}
       {category === 'modules' ? <path d="m12 4 8 4-8 4-8-4zM4 12l8 4 8-4M4 16l8 4 8-4" /> : null}
+      {category === 'semantic-areas' ? <path d="M4 6.5h7v5H4zM13 4h7v5h-7zM13 15h7v5h-7zM8 11.5v3.5h5M11 6.5h2" /> : null}
       {category === 'entities' ? <path d="M5 7c0-1.7 3.1-3 7-3s7 1.3 7 3-3.1 3-7 3-7-1.3-7-3zM5 7v5c0 1.7 3.1 3 7 3s7-1.3 7-3V7M5 12v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5" /> : null}
       {category === 'state-machines' ? <path d="M7 7a3 3 0 1 0 0.1 0M17 7a3 3 0 1 0 0.1 0M12 17a3 3 0 1 0 0.1 0M9.8 7h4.4M8.7 9.5l2 5M15.3 9.5l-2 5" /> : null}
     </svg>
@@ -815,19 +829,29 @@ function TopActivityNav({
 
 function ModelElementRail({
   activeCategory,
+  index,
+  isExpanded,
   onSelectCategory,
+  onToggleExpanded,
 }: {
   readonly activeCategory: ModelElementCategory;
+  readonly index: PathDerivedEntityIndex | undefined;
+  readonly isExpanded: boolean;
   readonly onSelectCategory: (category: ModelElementCategory) => void;
+  readonly onToggleExpanded: () => void;
 }) {
   return (
-    <nav className="model-element-rail" aria-label="Model element categories">
+    <nav
+      className={isExpanded ? 'model-element-rail model-element-rail--expanded' : 'model-element-rail'}
+      aria-label="Model element categories"
+    >
       <button
         className="model-rail-menu-button"
         type="button"
-        aria-label="Model navigation menu"
-        aria-expanded="false"
-        title="Model navigation"
+        aria-label={isExpanded ? 'Collapse model navigation' : 'Expand model navigation'}
+        aria-expanded={isExpanded}
+        title={isExpanded ? 'Collapse model navigation' : 'Expand model navigation'}
+        onClick={onToggleExpanded}
       >
         <ModelElementIcon category="menu" />
       </button>
@@ -847,7 +871,15 @@ function ModelElementRail({
             onClick={() => onSelectCategory(category.id)}
           >
             <ModelElementIcon category={category.id} />
-            <span className="visually-hidden">{category.label}</span>
+            <span className={isExpanded ? 'model-rail-label' : 'visually-hidden'}>{category.label}</span>
+            {isExpanded && category.scope ? (
+              <span
+                className="model-rail-count"
+                aria-label={`${getModelCategoryCount(index, category.scope)} ${category.label.toLowerCase()}`}
+              >
+                {getModelCategoryCount(index, category.scope)}
+              </span>
+            ) : null}
           </button>
         ))}
       </div>
@@ -857,6 +889,7 @@ function ModelElementRail({
 
 function ExplorerPanel({
   activeActivity,
+  activeModelCategory,
   index,
   relationships,
   searchResults,
@@ -873,6 +906,7 @@ function ExplorerPanel({
   onSelectEntity,
 }: {
   readonly activeActivity: ActivityMode;
+  readonly activeModelCategory: ModelElementCategory;
   readonly index: PathDerivedEntityIndex | undefined;
   readonly relationships: SelectedEntityRelationshipsViewModel | undefined;
   readonly searchResults: readonly SearchResult[];
@@ -894,26 +928,31 @@ function ExplorerPanel({
   return (
     <aside className="explorer-panel" aria-label="Explorer panel">
       <div className="panel-heading">
-        <p className="eyebrow">{formatActivityTitle(activeActivity)}</p>
-        <h2>{formatActivityTitle(activeActivity)}</h2>
+        <p className="eyebrow">
+          {activeActivity === 'explorer'
+            ? formatModelCategoryTitle(activeModelCategory).toUpperCase()
+            : formatActivityTitle(activeActivity)}
+        </p>
+        <h2>
+          {activeActivity === 'explorer'
+            ? formatModelCategoryTitle(activeModelCategory)
+            : formatActivityTitle(activeActivity)}
+        </h2>
       </div>
 
       {activeActivity === 'explorer' ? (
-        <>
-          <button className="overview-tree-button" type="button" onClick={() => onSelectActivity('explorer')}>
-            <span>Overview</span>
-            <small>Loaded workspace orientation</small>
-          </button>
-          {index ? (
-            <EntityScopeList
-              index={index}
-              selectedEntity={selectedEntity}
-              onSelectEntity={onSelectEntity}
-            />
-          ) : (
-            <EmptyWorkbenchState workspaceOverview={workspaceOverview} />
-          )}
-        </>
+        activeModelCategory === 'overview' ? (
+          <OverviewModelCategoryPanel workspaceOverview={workspaceOverview} onSelectActivity={onSelectActivity} />
+        ) : index ? (
+          <EntityScopeList
+            category={activeModelCategory}
+            index={index}
+            selectedEntity={selectedEntity}
+            onSelectEntity={onSelectEntity}
+          />
+        ) : (
+          <EmptyWorkbenchState workspaceOverview={workspaceOverview} />
+        )
       ) : null}
 
       {activeActivity === 'search' ? (
@@ -953,6 +992,28 @@ function ExplorerPanel({
   );
 }
 
+
+function OverviewModelCategoryPanel({
+  workspaceOverview,
+  onSelectActivity,
+}: {
+  readonly workspaceOverview: WorkspaceOverviewViewModel | undefined;
+  readonly onSelectActivity: (activity: ActivityMode) => void;
+}) {
+  return (
+    <>
+      <button className="overview-tree-button" type="button" onClick={() => onSelectActivity('explorer')}>
+        <span>Overview</span>
+        <small>Loaded workspace orientation</small>
+      </button>
+      {workspaceOverview ? (
+        <ScopeCountList overview={workspaceOverview} />
+      ) : (
+        <EmptyWorkbenchState workspaceOverview={workspaceOverview} />
+      )}
+    </>
+  );
+}
 
 function DiagramsActivityPanel({
   index,
@@ -1829,17 +1890,24 @@ function ScopeCountList({ overview }: { readonly overview: WorkspaceOverviewView
 }
 
 function EntityScopeList({
+  category,
   index,
   selectedEntity,
   onSelectEntity,
 }: {
+  readonly category?: ModelElementCategory;
   readonly index: PathDerivedEntityIndex;
   readonly selectedEntity: PathDerivedEntitySelection;
   readonly onSelectEntity: (selection: PathDerivedEntitySelection) => void;
 }) {
+  const scopeGroups =
+    category && category !== 'overview'
+      ? index.scopes.filter((scopeGroup) => scopeGroup.scope === category)
+      : index.scopes;
+
   return (
     <div className="entity-scope-list" aria-label="Path-derived entities grouped by scope">
-      {index.scopes.map((scopeGroup) => (
+      {scopeGroups.map((scopeGroup) => (
         <section className="entity-scope-group" key={scopeGroup.scope}>
           <h3>
             <span>{scopeGroup.scope}</span>
@@ -2692,8 +2760,19 @@ function formatCompactDiagnosticsStatus(
   return parts.join(' · ');
 }
 
+function getModelCategoryCount(
+  index: PathDerivedEntityIndex | undefined,
+  scope: ModelEntityScope,
+): number {
+  return index?.scopes.find((scopeGroup) => scopeGroup.scope === scope)?.entities.length ?? 0;
+}
+
 function formatActivityTitle(activity: ActivityMode): string {
   return activityItems.find((item) => item.id === activity)?.label ?? 'Explorer';
+}
+
+function formatModelCategoryTitle(category: ModelElementCategory): string {
+  return modelElementCategories.find((item) => item.id === category)?.label ?? 'Overview';
 }
 
 function formatDiagnosticSummary(overview: WorkspaceOverviewViewModel): string {

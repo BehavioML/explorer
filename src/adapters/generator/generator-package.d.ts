@@ -20,6 +20,7 @@ declare module '@behavioml/generator' {
     readonly formats?: readonly string[];
     readonly workflow?: string;
     readonly expandUses?: 'one-level' | 'recursive' | 'none' | boolean;
+    readonly workflowComposition?: 'collapsed' | 'expanded';
   }
 
   export function generateWorkspaceArtifacts(

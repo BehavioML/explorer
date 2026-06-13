@@ -66,6 +66,7 @@ export type {
 export { ApplicationError, adapterError, notImplemented } from './errors';
 export type { ApplicationErrorKind } from './errors';
 export {
+  createDiagramCacheKey,
   createGeneratingDiagramViewModel,
   createSelectedEntityDiagramViewModelFromArtifacts,
   createStateMachineGeneratorLimitationViewModel,
@@ -77,6 +78,7 @@ export type {
   GeneratedDiagramSourceEntity,
   GeneratedDiagramStatus,
   SelectedEntityDiagramViewModel,
+  WorkflowCompositionMode,
 } from './diagrams';
 export {
   BEHAVIOML_MODEL_SCOPE_DIRECTORIES,

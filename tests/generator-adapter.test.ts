@@ -238,3 +238,85 @@ test('malformed generator artifact collections are adapter errors', async () => 
 
   assert.equal(result.status, 'adapter_error');
 });
+
+test('generator adapter renders aggregated workflow references in collapsed mode through canonical Generator', async () => {
+  const result = await generateDiagramArtifactsForWorkspace(aggregatedWorkflowFiles, {
+    artifacts: ['workflow-sequence:aggregate/checkout'],
+    formats: ['mermaid'],
+    workflow: 'aggregate/checkout',
+  });
+
+  assert.equal(result.status, 'generated');
+  if (result.status !== 'generated') {
+    return;
+  }
+
+  assert.equal(result.artifacts.length, 1);
+  assert.deepEqual(result.artifacts[0]?.diagnostics ?? [], []);
+  assert.match(result.artifacts[0]?.content ?? '', /participant shopper as Shopper/);
+  assert.match(result.artifacts[0]?.content ?? '', /participant payment_gateway as Payment Gateway/);
+  assert.match(
+    result.artifacts[0]?.content ?? '',
+    /Note over shopper,payment_gateway: Child workflow: workflows\/checkout\/collect_payment/,
+  );
+  assert.doesNotMatch(result.artifacts[0]?.content ?? '', /Submit payment/);
+});
+
+test('generator adapter can request expanded aggregated workflow rendering with role binding', async () => {
+  const result = await generateDiagramArtifactsForWorkspace(aggregatedWorkflowFiles, {
+    artifacts: ['workflow-sequence:aggregate/checkout'],
+    formats: ['mermaid'],
+    workflow: 'aggregate/checkout',
+    workflowComposition: 'expanded',
+  });
+
+  assert.equal(result.status, 'generated');
+  if (result.status !== 'generated') {
+    return;
+  }
+
+  assert.equal(result.artifacts.length, 1);
+  assert.deepEqual(result.artifacts[0]?.diagnostics ?? [], []);
+  assert.match(result.artifacts[0]?.content ?? '', /shopper->>payment_gateway: Submit payment/);
+  assert.doesNotMatch(result.artifacts[0]?.content ?? '', /buyer->>processor/);
+});
+
+const aggregatedWorkflowFiles: readonly WorkspaceFileEntry[] = [
+  {
+    path: 'workflows/aggregate/checkout.yaml',
+    content: [
+      'name: Aggregate checkout',
+      'roles:',
+      '  primary: shopper',
+      '  participants:',
+      '    - payment_gateway',
+      'steps:',
+      '  - workflow: workflows/checkout/collect_payment',
+      '    bind:',
+      '      buyer: shopper',
+      '      processor: payment_gateway',
+      '',
+    ].join('\n'),
+  },
+  {
+    path: 'workflows/checkout/collect_payment.yaml',
+    content: [
+      'name: Collect payment',
+      'roles:',
+      '  primary: buyer',
+      '  participants:',
+      '    - processor',
+      'steps:',
+      '  - from: buyer',
+      '    to: processor',
+      '    capability: checkout/submit_payment',
+      '    label: Submit payment',
+      '',
+    ].join('\n'),
+  },
+  { path: 'roles/shopper.yaml', content: 'description: Checkout shopper.\n' },
+  { path: 'roles/payment_gateway.yaml', content: 'description: Payment gateway.\n' },
+  { path: 'roles/buyer.yaml', content: 'description: Generic buyer.\n' },
+  { path: 'roles/processor.yaml', content: 'description: Generic payment processor.\n' },
+  { path: 'capabilities/checkout/submit_payment.yaml', content: 'description: Submit payment.\n' },
+];

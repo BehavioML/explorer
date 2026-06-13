@@ -4,6 +4,7 @@ import type {
   PathDerivedModelEntity,
   SelectedEntityDiagramViewModel,
   WorkspaceFileEntry,
+  WorkflowCompositionMode,
 } from '../../core';
 import {
   ApplicationError,
@@ -19,7 +20,7 @@ export interface GenerateDiagramArtifactsForWorkspaceOptions {
   readonly formats?: readonly string[];
   readonly workflow?: string;
   readonly expandUses?: 'one-level' | 'recursive' | 'none' | boolean;
-  readonly workflowComposition?: 'collapsed' | 'expanded';
+  readonly workflowComposition?: WorkflowCompositionMode;
   readonly moduleLoader?: () => Promise<GeneratorModuleLike>;
 }
 
@@ -42,7 +43,7 @@ interface GeneratorModuleLike {
       readonly formats?: readonly string[];
       readonly workflow?: string;
       readonly expandUses?: 'one-level' | 'recursive' | 'none' | boolean;
-      readonly workflowComposition?: 'collapsed' | 'expanded';
+      readonly workflowComposition?: WorkflowCompositionMode;
     },
   ) => Promise<readonly unknown[]> | readonly unknown[];
 }

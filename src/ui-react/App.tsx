@@ -15,6 +15,7 @@ import {
   createRelationshipNavigationTarget,
   findUnresolvedReferencesForDiagnostic,
   createSelectedEntityRelationships,
+  createDiagramCacheKey,
   createGeneratingDiagramViewModel,
   createSourceFileView,
   createValidatedWorkspaceOverview,
@@ -39,6 +40,7 @@ import {
   type WorkspaceFileEntry,
   type WorkspaceOverviewValidationStatus,
   type WorkspaceOverviewViewModel,
+  type WorkflowCompositionMode,
 } from '../core';
 import {
   activateWorkspaceDocument,
@@ -137,6 +139,7 @@ export function App() {
   const [isModelRailExpanded, setModelRailExpanded] = useState(false);
   const [workspaceDocumentState, setWorkspaceDocumentState] = useState(createInitialWorkspaceDocumentState);
   const [diagramCache, setDiagramCache] = useState<Record<string, SelectedEntityDiagramViewModel>>({});
+  const [workflowCompositionMode, setWorkflowCompositionMode] = useState<WorkflowCompositionMode>('collapsed');
   const [layoutSizes, setLayoutSizes] = useState<WorkbenchLayoutSizes>({
     explorerWidth: 320,
     inspectorWidth: 320,
@@ -256,7 +259,7 @@ export function App() {
     : [];
   const activeDiagramCacheKey =
     activeDocument.kind === 'entity' && activeDocument.activeView === 'diagram'
-      ? createDiagramCacheKey(activeDocument)
+      ? createDiagramCacheKey(activeDocument, workflowCompositionMode)
       : undefined;
   const activeDiagramView = activeDiagramCacheKey ? diagramCache[activeDiagramCacheKey] : undefined;
   const displayedDiagramView =
@@ -282,7 +285,9 @@ export function App() {
     }
 
     let cancelled = false;
-    void generateDiagramArtifactForEntity(workspaceFiles, selected)
+    void generateDiagramArtifactForEntity(workspaceFiles, selected, {
+      ...(selected?.scope === 'workflows' ? { workflowComposition: workflowCompositionMode } : {}),
+    })
       .then((diagramView) => renderSelectedDiagramView(diagramView, activeDiagramCacheKey))
       .then((diagramView) => {
         if (cancelled) {
@@ -298,7 +303,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeDocument, activeDiagramCacheKey, diagramCache, selected, workspaceFiles]);
+  }, [activeDocument, activeDiagramCacheKey, diagramCache, selected, workflowCompositionMode, workspaceFiles]);
 
   function handleEntitySelected(selection: PathDerivedEntitySelection) {
     if (!selection) {
@@ -555,6 +560,7 @@ export function App() {
           diagnostics={selectedDiagnostics}
           diagramView={displayedDiagramView}
           entity={selected}
+          workflowCompositionMode={workflowCompositionMode}
           selectedDiagnostic={selectedDiagnostic}
           selectedSearchResult={selectedSearchResult}
           sourceView={sourceView}
@@ -567,6 +573,7 @@ export function App() {
           onCloseDocument={handleWorkspaceDocumentClosed}
           onSelectDocument={handleWorkspaceDocumentSelected}
           onSelectEntityView={handleEntityDocumentViewSelected}
+          onWorkflowCompositionModeChanged={setWorkflowCompositionMode}
         />
         <ResizeHandle
           orientation="vertical"
@@ -1076,6 +1083,7 @@ function WorkspaceTabs({
   diagramView,
   documents,
   entity,
+  workflowCompositionMode,
   entityIndex,
   relationships,
   selectedDiagnostic,
@@ -1088,6 +1096,7 @@ function WorkspaceTabs({
   onCloseDocument,
   onSelectDocument,
   onSelectEntityView,
+  onWorkflowCompositionModeChanged,
 }: {
   readonly activeActivity: ActivityMode;
   readonly activeDocument: WorkspaceDocument;
@@ -1095,6 +1104,7 @@ function WorkspaceTabs({
   readonly diagramView: SelectedEntityDiagramViewModel | undefined;
   readonly documents: readonly WorkspaceDocument[];
   readonly entity: PathDerivedModelEntity | undefined;
+  readonly workflowCompositionMode: WorkflowCompositionMode;
   readonly entityIndex: PathDerivedEntityIndex | undefined;
   readonly relationships: SelectedEntityRelationshipsViewModel | undefined;
   readonly selectedDiagnostic: DiagnosticSelection | undefined;
@@ -1110,6 +1120,7 @@ function WorkspaceTabs({
   readonly onCloseDocument: (document: WorkspaceDocument) => void;
   readonly onSelectDocument: (document: WorkspaceDocument) => void;
   readonly onSelectEntityView: (view: EntityWorkspaceDocumentView) => void;
+  readonly onWorkflowCompositionModeChanged: (mode: WorkflowCompositionMode) => void;
 }) {
   return (
     <section className="workspace-area" aria-label="Workspace tabs and content">
@@ -1171,12 +1182,14 @@ function WorkspaceTabs({
             diagnostics={diagnostics}
             diagramView={diagramView}
             entity={entity}
+            workflowCompositionMode={workflowCompositionMode}
             relationships={relationships}
             selectedDiagnostic={selectedDiagnostic}
             selectedSearchResult={selectedSearchResult}
             sourceView={sourceView}
             onRelationshipTargetSelected={onRelationshipTargetSelected}
             onSelectView={onSelectEntityView}
+            onWorkflowCompositionModeChanged={onWorkflowCompositionModeChanged}
           />
         ) : null}
       </div>
@@ -1212,17 +1225,20 @@ function EntityDocumentWorkspace({
   diagnostics,
   diagramView,
   entity,
+  workflowCompositionMode,
   relationships,
   selectedDiagnostic,
   selectedSearchResult,
   sourceView,
   onRelationshipTargetSelected,
   onSelectView,
+  onWorkflowCompositionModeChanged,
 }: {
   readonly activeView: EntityWorkspaceDocumentView;
   readonly diagnostics: readonly DiagnosticViewModel[];
   readonly diagramView: SelectedEntityDiagramViewModel | undefined;
   readonly entity: PathDerivedModelEntity | undefined;
+  readonly workflowCompositionMode: WorkflowCompositionMode;
   readonly relationships: SelectedEntityRelationshipsViewModel | undefined;
   readonly selectedDiagnostic: DiagnosticSelection | undefined;
   readonly selectedSearchResult: SearchResult | undefined;
@@ -1232,6 +1248,7 @@ function EntityDocumentWorkspace({
     side: RelationshipNavigationSide,
   ) => void;
   readonly onSelectView: (view: EntityWorkspaceDocumentView) => void;
+  readonly onWorkflowCompositionModeChanged: (mode: WorkflowCompositionMode) => void;
 }) {
   const viewTabs: readonly { readonly id: EntityWorkspaceDocumentView; readonly label: string }[] = [
     { id: 'source', label: 'Source' },
@@ -1274,7 +1291,14 @@ function EntityDocumentWorkspace({
             onSelectTarget={onRelationshipTargetSelected}
           />
         ) : null}
-        {activeView === 'diagram' ? <DiagramView diagramView={diagramView} entity={entity} /> : null}
+        {activeView === 'diagram' ? (
+          <DiagramView
+            diagramView={diagramView}
+            entity={entity}
+            workflowCompositionMode={workflowCompositionMode}
+            onWorkflowCompositionModeChanged={onWorkflowCompositionModeChanged}
+          />
+        ) : null}
       </div>
     </div>
   );
@@ -1420,9 +1444,13 @@ function WorkspaceOverviewPanel({
 function DiagramView({
   diagramView,
   entity,
+  workflowCompositionMode,
+  onWorkflowCompositionModeChanged,
 }: {
   readonly diagramView: SelectedEntityDiagramViewModel | undefined;
   readonly entity: PathDerivedModelEntity | undefined;
+  readonly workflowCompositionMode: WorkflowCompositionMode;
+  readonly onWorkflowCompositionModeChanged: (mode: WorkflowCompositionMode) => void;
 }) {
   const view = diagramView ?? createGeneratingDiagramViewModel(entity);
   const artifact = view.artifact;
@@ -1436,6 +1464,27 @@ function DiagramView({
         </div>
         {entity ? <span>{entity.scope}</span> : null}
       </div>
+
+      {entity?.scope === 'workflows' ? (
+        <div className="diagram-mode-control" role="group" aria-label="Workflow composition rendering mode">
+          <span>Workflow composition</span>
+          {(['collapsed', 'expanded'] as const).map((mode) => (
+            <button
+              className={
+                workflowCompositionMode === mode
+                  ? 'diagram-mode-button diagram-mode-button--active'
+                  : 'diagram-mode-button'
+              }
+              type="button"
+              key={mode}
+              aria-pressed={workflowCompositionMode === mode}
+              onClick={() => onWorkflowCompositionModeChanged(mode)}
+            >
+              {mode === 'collapsed' ? 'Collapsed' : 'Expanded'}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <div className="diagram-artifact-panel" aria-live="polite">
         <p className={`diagram-status diagram-status--${view.status}`}>{view.message}</p>
@@ -1560,10 +1609,6 @@ async function renderSelectedDiagramView(
     ...diagramView,
     renderedSvg: result.svg,
   };
-}
-
-function createDiagramCacheKey(entity: Pick<PathDerivedModelEntity, 'scope' | 'identity'>): string {
-  return `${entity.scope}:${entity.identity}`;
 }
 
 function InspectorPanel({

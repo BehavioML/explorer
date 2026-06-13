@@ -1,6 +1,8 @@
 import type { DiagnosticViewModel } from './diagnostics';
 import type { PathDerivedModelEntity } from './entityIndex';
 
+export type WorkflowCompositionMode = 'collapsed' | 'expanded';
+
 export type GeneratedDiagramStatus =
   | 'generated'
   | 'generating'
@@ -184,4 +186,16 @@ function createGeneratedDiagramViewModel(
     artifact,
     diagnostics: artifact.diagnostics,
   };
+}
+
+
+export function createDiagramCacheKey(
+  entity: Pick<PathDerivedModelEntity, 'scope' | 'identity'>,
+  workflowCompositionMode: WorkflowCompositionMode = 'collapsed',
+): string {
+  const baseKey = `${entity.scope}:${entity.identity}`;
+
+  return entity.scope === 'workflows'
+    ? `${baseKey}:workflowComposition=${workflowCompositionMode}`
+    : baseKey;
 }

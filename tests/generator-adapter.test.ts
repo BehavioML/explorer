@@ -5,6 +5,7 @@ import {
   generateDiagramArtifactsForWorkspace,
   toGeneratedDiagramArtifactViewModel,
 } from '../src/adapters/generator';
+import { createDiagramCacheKey } from '../src/core';
 import type { PathDerivedModelEntity, WorkspaceFileEntry } from '../src/core';
 
 const workflowEntity: PathDerivedModelEntity = {
@@ -128,6 +129,51 @@ test('workflow entity requests a single workflow sequence artifact using the sel
   ]);
 });
 
+
+test('workflow entity forwards requested workflow composition mode to Generator', async () => {
+  const requestedOptions: unknown[] = [];
+
+  await generateDiagramArtifactForEntity(files, workflowEntity, {
+    workflowComposition: 'collapsed',
+    moduleLoader: async () => ({
+      generateWorkspaceArtifacts: (_files, options) => {
+        requestedOptions.push(options);
+        return [
+          {
+            kind: 'workflow-sequence',
+            format: 'mermaid',
+            title: 'Workflow sequence: checkout/place_order',
+            path: 'generated/workflows/checkout/place_order.mmd',
+            content: 'sequenceDiagram\n',
+            sourceEntity: { kind: 'workflow', id: 'checkout/place_order' },
+          },
+        ];
+      },
+    }),
+  });
+
+  assert.deepEqual(requestedOptions, [
+    {
+      workflowComposition: 'collapsed',
+      artifacts: ['workflow-sequence:checkout/place_order'],
+      formats: ['mermaid'],
+      workflow: 'checkout/place_order',
+    },
+  ]);
+});
+
+test('diagram cache key distinguishes collapsed and expanded workflow diagrams only', () => {
+  assert.equal(
+    createDiagramCacheKey(workflowEntity, 'collapsed'),
+    'workflows:checkout/place_order:workflowComposition=collapsed',
+  );
+  assert.equal(
+    createDiagramCacheKey(workflowEntity, 'expanded'),
+    'workflows:checkout/place_order:workflowComposition=expanded',
+  );
+  assert.equal(createDiagramCacheKey(stateMachineEntity, 'expanded'), 'state-machines:checkout/order_state');
+});
+
 test('unsupported entity type returns an unsupported diagram status without calling generator', async () => {
   let generatorWasCalled = false;
   const diagram = await generateDiagramArtifactForEntity(files, capabilityEntity, {
@@ -241,9 +287,9 @@ test('malformed generator artifact collections are adapter errors', async () => 
 
 test('generator adapter renders aggregated workflow references in collapsed mode through canonical Generator', async () => {
   const result = await generateDiagramArtifactsForWorkspace(aggregatedWorkflowFiles, {
-    artifacts: ['workflow-sequence:aggregate/checkout'],
+    artifacts: ['workflow-sequence:aggregate/startup'],
     formats: ['mermaid'],
-    workflow: 'aggregate/checkout',
+    workflow: 'aggregate/startup',
   });
 
   assert.equal(result.status, 'generated');
@@ -253,20 +299,20 @@ test('generator adapter renders aggregated workflow references in collapsed mode
 
   assert.equal(result.artifacts.length, 1);
   assert.deepEqual(result.artifacts[0]?.diagnostics ?? [], []);
-  assert.match(result.artifacts[0]?.content ?? '', /participant shopper as Shopper/);
-  assert.match(result.artifacts[0]?.content ?? '', /participant payment_gateway as Payment Gateway/);
+  assert.match(result.artifacts[0]?.content ?? '', /participant client as Client/);
+  assert.match(result.artifacts[0]?.content ?? '', /participant server as Server/);
   assert.match(
     result.artifacts[0]?.content ?? '',
-    /Note over shopper,payment_gateway: Child workflow: workflows\/checkout\/collect_payment/,
+    /Note over client,server: Child workflow: workflows\/child\/request/,
   );
-  assert.doesNotMatch(result.artifacts[0]?.content ?? '', /Submit payment/);
+  assert.doesNotMatch(result.artifacts[0]?.content ?? '', /Send request/);
 });
 
 test('generator adapter can request expanded aggregated workflow rendering with role binding', async () => {
   const result = await generateDiagramArtifactsForWorkspace(aggregatedWorkflowFiles, {
-    artifacts: ['workflow-sequence:aggregate/checkout'],
+    artifacts: ['workflow-sequence:aggregate/startup'],
     formats: ['mermaid'],
-    workflow: 'aggregate/checkout',
+    workflow: 'aggregate/startup',
     workflowComposition: 'expanded',
   });
 
@@ -277,46 +323,45 @@ test('generator adapter can request expanded aggregated workflow rendering with 
 
   assert.equal(result.artifacts.length, 1);
   assert.deepEqual(result.artifacts[0]?.diagnostics ?? [], []);
-  assert.match(result.artifacts[0]?.content ?? '', /shopper->>payment_gateway: Submit payment/);
-  assert.doesNotMatch(result.artifacts[0]?.content ?? '', /buyer->>processor/);
+  assert.match(result.artifacts[0]?.content ?? '', /client->>server: Send request/);
+  assert.doesNotMatch(result.artifacts[0]?.content ?? '', /initiator->>responder/);
 });
 
 const aggregatedWorkflowFiles: readonly WorkspaceFileEntry[] = [
+  { path: 'roles/client.yaml', content: 'description: Client.\n' },
+  { path: 'roles/server.yaml', content: 'description: Server.\n' },
+  { path: 'roles/initiator.yaml', content: 'description: Initiator.\n' },
+  { path: 'roles/responder.yaml', content: 'description: Responder.\n' },
+  { path: 'capabilities/protocol/send_request.yaml', content: 'description: Send request.\n' },
+  { path: 'capabilities/protocol/receive_request.yaml', content: 'description: Receive request.\n' },
   {
-    path: 'workflows/aggregate/checkout.yaml',
+    path: 'workflows/child/request.yaml',
     content: [
-      'name: Aggregate checkout',
       'roles:',
-      '  primary: shopper',
+      '  primary: initiator',
       '  participants:',
-      '    - payment_gateway',
+      '    - responder',
       'steps:',
-      '  - workflow: workflows/checkout/collect_payment',
+      '  - from: initiator',
+      '    to: responder',
+      '    capability: protocol/send_request',
+      '    label: Send request',
+      '',
+    ].join('\n'),
+  },
+  {
+    path: 'workflows/aggregate/startup.yaml',
+    content: [
+      'roles:',
+      '  primary: client',
+      '  participants:',
+      '    - server',
+      'steps:',
+      '  - workflow: workflows/child/request',
       '    bind:',
-      '      buyer: shopper',
-      '      processor: payment_gateway',
+      '      initiator: client',
+      '      responder: server',
       '',
     ].join('\n'),
   },
-  {
-    path: 'workflows/checkout/collect_payment.yaml',
-    content: [
-      'name: Collect payment',
-      'roles:',
-      '  primary: buyer',
-      '  participants:',
-      '    - processor',
-      'steps:',
-      '  - from: buyer',
-      '    to: processor',
-      '    capability: checkout/submit_payment',
-      '    label: Submit payment',
-      '',
-    ].join('\n'),
-  },
-  { path: 'roles/shopper.yaml', content: 'description: Checkout shopper.\n' },
-  { path: 'roles/payment_gateway.yaml', content: 'description: Payment gateway.\n' },
-  { path: 'roles/buyer.yaml', content: 'description: Generic buyer.\n' },
-  { path: 'roles/processor.yaml', content: 'description: Generic payment processor.\n' },
-  { path: 'capabilities/checkout/submit_payment.yaml', content: 'description: Submit payment.\n' },
 ];

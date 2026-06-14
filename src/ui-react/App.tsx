@@ -52,6 +52,7 @@ import {
   type EntityWorkspaceDocumentView,
   type WorkspaceDocument,
 } from './workspaceDocuments';
+import { BehaviorMapView } from '../components/BehaviorMapView';
 
 type Status =
   | { readonly kind: 'idle'; readonly message: string }
@@ -59,7 +60,7 @@ type Status =
   | { readonly kind: 'validated'; readonly message: string; readonly validation: ValidationResultViewModel }
   | { readonly kind: 'error'; readonly message: string };
 
-type ActivityMode = 'explorer' | 'search' | 'validation' | 'diagrams' | 'relationships';
+type ActivityMode = 'explorer' | 'search' | 'validation' | 'diagrams' | 'relationships' | 'map';
 
 const activityItems: readonly {
   readonly id: ActivityMode;
@@ -70,6 +71,7 @@ const activityItems: readonly {
   { id: 'validation', label: 'Validation' },
   { id: 'diagrams', label: 'Diagrams' },
   { id: 'relationships', label: 'Relationships' },
+  { id: 'map', label: 'Map' },
 ];
 
 type ModelElementCategory =
@@ -573,6 +575,7 @@ export function App() {
           onCloseDocument={handleWorkspaceDocumentClosed}
           onSelectDocument={handleWorkspaceDocumentSelected}
           onSelectEntityView={handleEntityDocumentViewSelected}
+          onSelectMapEntityFromView={handleEntitySelected}
           onWorkflowCompositionModeChanged={setWorkflowCompositionMode}
         />
         <ResizeHandle
@@ -675,6 +678,9 @@ function ActivityIcon({ activity }: { readonly activity: ActivityMode }) {
       ) : null}
       {activity === 'relationships' ? (
         <path d="M7 7h4v4H7zM13 13h4v4h-4zM11 9.5c2.5 0 3.5 1 3.5 3.5M5 17c1.5-4.5 9-8.5 14-10" />
+      ) : null}
+      {activity === 'map' ? (
+        <path d="M6 6a3 3 0 1 0 .1 0M18 7a3 3 0 1 0 .1 0M12 17a3 3 0 1 0 .1 0M8.5 7h6M7.5 9l3 6M16.5 10l-3 5" />
       ) : null}
     </svg>
   );
@@ -1096,6 +1102,7 @@ function WorkspaceTabs({
   onCloseDocument,
   onSelectDocument,
   onSelectEntityView,
+  onSelectMapEntityFromView,
   onWorkflowCompositionModeChanged,
 }: {
   readonly activeActivity: ActivityMode;
@@ -1120,8 +1127,12 @@ function WorkspaceTabs({
   readonly onCloseDocument: (document: WorkspaceDocument) => void;
   readonly onSelectDocument: (document: WorkspaceDocument) => void;
   readonly onSelectEntityView: (view: EntityWorkspaceDocumentView) => void;
+  readonly onSelectMapEntityFromView: (selection: PathDerivedEntitySelection) => void;
   readonly onWorkflowCompositionModeChanged: (mode: WorkflowCompositionMode) => void;
 }) {
+  function onSelectMapEntity(selection: PathDerivedEntitySelection) {
+    onSelectMapEntityFromView(selection);
+  }
   return (
     <section className="workspace-area" aria-label="Workspace tabs and content">
       <div className="workspace-tab-strip" role="tablist" aria-label="Workspace documents">
@@ -1163,7 +1174,7 @@ function WorkspaceTabs({
       </div>
 
       <div className="workspace-content">
-        {activeDocument.kind === 'overview' && activeActivity !== 'diagrams' ? (
+        {activeDocument.kind === 'overview' && activeActivity !== 'diagrams' && activeActivity !== 'map' ? (
           <WorkspaceOverviewPanel
             overview={workspaceOverview}
             entityIndex={entityIndex}
@@ -1176,7 +1187,27 @@ function WorkspaceTabs({
         {activeDocument.kind === 'overview' && activeActivity === 'diagrams' ? (
           <DiagramsLandingPanel entityIndex={entityIndex} />
         ) : null}
-        {activeDocument.kind === 'entity' ? (
+        {activeDocument.kind === 'overview' && activeActivity === 'map' ? (
+          <BehaviorMapView
+            entityIndex={entityIndex}
+            entitySummaries={validation?.entitySummaries}
+            referenceIndex={validation?.referenceIndex}
+            diagnostics={validation?.diagnostics}
+            selectedEntity={undefined}
+            onSelectEntity={onSelectMapEntity}
+          />
+        ) : null}
+        {activeDocument.kind === 'entity' && activeActivity === 'map' ? (
+          <BehaviorMapView
+            entityIndex={entityIndex}
+            entitySummaries={validation?.entitySummaries}
+            referenceIndex={validation?.referenceIndex}
+            diagnostics={validation?.diagnostics}
+            selectedEntity={getActiveEntitySelection(activeDocument)}
+            onSelectEntity={onSelectMapEntity}
+          />
+        ) : null}
+        {activeDocument.kind === 'entity' && activeActivity !== 'map' ? (
           <EntityDocumentWorkspace
             activeView={activeDocument.activeView}
             diagnostics={diagnostics}

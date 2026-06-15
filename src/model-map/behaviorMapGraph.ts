@@ -6,7 +6,7 @@ import type {
   SemanticReferenceIndexViewModel,
 } from '../core';
 
-export type BehaviorMapNodeKind = 'semantic-area' | 'workflow' | 'capability';
+export type BehaviorMapNodeKind = 'manifest' | 'semantic-area' | 'aggregated-workflow' | 'workflow' | 'capability' | 'event' | 'entity' | 'state-machine' | 'decision';
 export type WorkflowVisualSubtype = 'regular' | 'aggregated';
 
 export type BehaviorMapNode = {
@@ -20,9 +20,12 @@ export type BehaviorMapNode = {
 };
 
 export type BehaviorMapEdgeKind =
+  | 'manifest-contains-semantic-area'
   | 'semantic-area-contains-workflow'
+  | 'semantic-area-contains-aggregated-workflow'
   | 'aggregated-workflow-contains-workflow'
-  | 'workflow-uses-capability';
+  | 'workflow-uses-capability'
+  | 'model-reference';
 
 export type BehaviorMapEdge = {
   id: string;
@@ -45,12 +48,18 @@ export interface CreateBehaviorMapGraphInput {
   readonly referenceIndex?: SemanticReferenceIndexViewModel;
   readonly diagnostics?: readonly DiagnosticViewModel[];
   readonly expansion?: BehaviorMapExpansionState;
+  readonly manifestId?: string;
 }
 
 const NODE_SCOPE_BY_KIND = {
   'semantic-area': 'semantic-areas',
   workflow: 'workflows',
+  'aggregated-workflow': 'workflows',
   capability: 'capabilities',
+  event: 'events',
+  entity: 'entities',
+  'state-machine': 'state-machines',
+  decision: 'decisions',
 } as const;
 
 export function createBehaviorMapGraph(input: CreateBehaviorMapGraphInput): BehaviorMapGraph {
@@ -59,11 +68,15 @@ export function createBehaviorMapGraph(input: CreateBehaviorMapGraphInput): Beha
   const edges = new Map<string, BehaviorMapEdge>();
   const diagnosticsByRef = summarizeDiagnostics(input.diagnostics ?? [], input.entityIndex.entities);
   const semanticAreaSummaries = (input.entitySummaries ?? []).filter((summary) => summary.scope === 'semantic-areas');
+  const manifestId = input.manifestId?.trim() || 'BehavioML manifest';
+  const manifestNode = createManifestNode(manifestId);
+  addNode(nodes, manifestNode);
 
   for (const area of input.entityIndex.entities.filter((entity) => entity.scope === 'semantic-areas')) {
     const summary = semanticAreaSummaries.find((candidate) => candidate.identity === area.identity);
     const workflowRefs = getSemanticAreaWorkflowReferences(summary, input.referenceIndex, area);
     addNode(nodes, createNode(area, 'semantic-area', workflowRefs.length || 1, diagnosticsByRef));
+    addEdgeByNodeIds(edges, manifestNode.id, toNodeId('semantic-area', area), 'manifest-contains-semantic-area', 'behavio.yaml:id');
 
     if (!input.expansion?.expandedNodeIds.has(toNodeId('semantic-area', area))) {
       continue;
@@ -74,8 +87,8 @@ export function createBehaviorMapGraph(input: CreateBehaviorMapGraphInput): Beha
       if (!workflow) {
         continue;
       }
-      addWorkflowNode(nodes, workflow, input.referenceIndex, diagnosticsByRef);
-      addEdge(edges, area, workflow, 'semantic-area-contains-workflow', 'workflows[]');
+      const workflowNode = addWorkflowNode(nodes, workflow, input.referenceIndex, diagnosticsByRef);
+      addEdgeByNodeIds(edges, toNodeId('semantic-area', area), workflowNode.id, workflowNode.kind === 'aggregated-workflow' ? 'semantic-area-contains-aggregated-workflow' : 'semantic-area-contains-workflow', 'workflows[]');
     }
   }
 
@@ -85,7 +98,7 @@ export function createBehaviorMapGraph(input: CreateBehaviorMapGraphInput): Beha
     addedExpandedWorkflow = false;
     const expandedWorkflows = [...nodes.values()].filter(
       (node) =>
-        node.kind === 'workflow' &&
+        (node.kind === 'workflow' || node.kind === 'aggregated-workflow') &&
         input.expansion?.expandedNodeIds.has(node.id) &&
         !processedExpandedWorkflows.has(node.id),
     );
@@ -100,15 +113,24 @@ export function createBehaviorMapGraph(input: CreateBehaviorMapGraphInput): Beha
         if (reference.targetScope === 'workflows' && isAggregateWorkflowField(reference.fieldPath)) {
           const child = artifactByRef.get(toRef('workflows', reference.targetIdentity));
           if (!child) continue;
-          addWorkflowNode(nodes, child, input.referenceIndex, diagnosticsByRef);
-          addEdge(edges, workflow, child, 'aggregated-workflow-contains-workflow', reference.fieldPath);
+          const childNode = addWorkflowNode(nodes, child, input.referenceIndex, diagnosticsByRef);
+          addEdgeByNodeIds(edges, node.id, childNode.id, 'aggregated-workflow-contains-workflow', reference.fieldPath);
           addedExpandedWorkflow = true;
         }
         if (reference.targetScope === 'capabilities' && isStepCapabilityField(reference.fieldPath)) {
           const capability = artifactByRef.get(toRef('capabilities', reference.targetIdentity));
           if (!capability) continue;
-          addNode(nodes, createNode(capability, 'capability', 1, diagnosticsByRef));
-          addEdge(edges, workflow, capability, 'workflow-uses-capability', reference.fieldPath);
+          const capabilityNode = createNode(capability, 'capability', 1, diagnosticsByRef);
+          addNode(nodes, capabilityNode);
+          addEdgeByNodeIds(edges, node.id, capabilityNode.id, 'workflow-uses-capability', reference.fieldPath);
+        }
+        if (isRelatedModelScope(reference.targetScope) && !isAggregateWorkflowField(reference.fieldPath) && !isStepCapabilityField(reference.fieldPath)) {
+          const target = artifactByRef.get(toRef(reference.targetScope, reference.targetIdentity));
+          const targetKind = nodeKindForScope(reference.targetScope);
+          if (!target || !targetKind) continue;
+          const targetNode = createNode(target, targetKind, 1, diagnosticsByRef);
+          addNode(nodes, targetNode);
+          addEdgeByNodeIds(edges, node.id, targetNode.id, 'model-reference', reference.fieldPath);
         }
       }
     }
@@ -135,8 +157,8 @@ function addWorkflowNode(
   workflow: PathDerivedModelEntity,
   referenceIndex: SemanticReferenceIndexViewModel | undefined,
   diagnosticsByRef: Map<string, BehaviorMapNode['diagnostics']>,
-) {
-  const subtype = (referenceIndex?.outgoingReferences ?? []).some(
+): BehaviorMapNode {
+  const subtype: WorkflowVisualSubtype = (referenceIndex?.outgoingReferences ?? []).some(
     (reference) =>
       reference.source.scope === 'workflows' &&
       reference.source.identity === workflow.identity &&
@@ -146,7 +168,10 @@ function addWorkflowNode(
   )
     ? 'aggregated'
     : 'regular';
-  addNode(nodes, { ...createNode(workflow, 'workflow', 1, diagnosticsByRef), workflowSubtype: subtype });
+  const kind = subtype === 'aggregated' ? 'aggregated-workflow' : 'workflow';
+  const node = { ...createNode(workflow, kind, 1, diagnosticsByRef), workflowSubtype: subtype };
+  addNode(nodes, node);
+  return node;
 }
 
 function getSemanticAreaWorkflowReferences(
@@ -175,6 +200,10 @@ function isAggregateWorkflowField(fieldPath: string): boolean {
   return /^steps\[\d+\]\.workflow$/.test(fieldPath);
 }
 
+function createManifestNode(manifestId: string): BehaviorMapNode {
+  return { id: `manifest:${manifestId}`, ref: `manifest/${manifestId}`, kind: 'manifest', label: manifestId, sizeWeight: 1 };
+}
+
 function createNode(
   entity: PathDerivedModelEntity,
   kind: BehaviorMapNodeKind,
@@ -197,22 +226,11 @@ function toNodeId(kind: BehaviorMapNodeKind, entity: Pick<PathDerivedModelEntity
 }
 
 function addNode(nodes: Map<string, BehaviorMapNode>, node: BehaviorMapNode) {
-  if (NODE_SCOPE_BY_KIND[node.kind] === parseBehaviorMapRef(node.ref)?.scope) nodes.set(node.id, node);
+  if (node.kind === 'manifest' || NODE_SCOPE_BY_KIND[node.kind] === parseBehaviorMapRef(node.ref)?.scope) nodes.set(node.id, node);
 }
 
-function addEdge(edges: Map<string, BehaviorMapEdge>, source: PathDerivedModelEntity, target: PathDerivedModelEntity, kind: BehaviorMapEdgeKind, sourceField: string) {
-  const sourceKind = nodeKindForScope(source.scope);
-  const targetKind = nodeKindForScope(target.scope);
-  if (!sourceKind || !targetKind) return;
-
-  const edge = {
-    id: `${kind}:${source.scope}/${source.identity}->${target.scope}/${target.identity}:${sourceField}`,
-    source: toNodeId(sourceKind, source),
-    target: toNodeId(targetKind, target),
-    kind,
-    explicit: true as const,
-    sourceField,
-  };
+function addEdgeByNodeIds(edges: Map<string, BehaviorMapEdge>, source: string, target: string, kind: BehaviorMapEdgeKind, sourceField: string) {
+  const edge = { id: `${kind}:${source}->${target}:${sourceField}`, source, target, kind, explicit: true as const, sourceField };
   edges.set(edge.id, edge);
 }
 
@@ -220,7 +238,19 @@ function nodeKindForScope(scope: string): BehaviorMapNodeKind | undefined {
   if (scope === 'semantic-areas') return 'semantic-area';
   if (scope === 'workflows') return 'workflow';
   if (scope === 'capabilities') return 'capability';
+  if (scope === 'events') return 'event';
+  if (scope === 'entities') return 'entity';
+  if (scope === 'state-machines') return 'state-machine';
+  if (scope === 'decisions') return 'decision';
   return undefined;
+}
+
+function isValidNodeKindForScope(kind: BehaviorMapNodeKind, scope: string): boolean {
+  return nodeKindForScope(scope) === kind || (scope === 'workflows' && kind === 'aggregated-workflow');
+}
+
+function isRelatedModelScope(scope: string): boolean {
+  return scope === 'capabilities' || scope === 'events' || scope === 'entities' || scope === 'state-machines' || scope === 'decisions';
 }
 
 export function validateBehaviorMapGraph(graph: BehaviorMapGraph, artifactRefs?: ReadonlySet<string>): string[] {
@@ -234,9 +264,9 @@ export function validateBehaviorMapGraph(graph: BehaviorMapGraph, artifactRefs?:
 
     const parsed = parseBehaviorMapRef(node.ref);
     if (!parsed) problems.push(`invalid node ref: ${node.id} -> ${node.ref}`);
-    else if (nodeKindForScope(parsed.scope) !== node.kind) problems.push(`node kind/scope mismatch: ${node.id} -> ${node.ref}`);
+    else if (node.kind !== 'manifest' && !isValidNodeKindForScope(node.kind, parsed.scope)) problems.push(`node kind/scope mismatch: ${node.id} -> ${node.ref}`);
 
-    if (artifactRefs && !artifactRefs.has(node.ref)) problems.push(`node ref missing artifact: ${node.id} -> ${node.ref}`);
+    if (artifactRefs && node.kind !== 'manifest' && !artifactRefs.has(node.ref)) problems.push(`node ref missing artifact: ${node.id} -> ${node.ref}`);
   }
 
   for (const edge of graph.edges) {

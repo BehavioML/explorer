@@ -1815,9 +1815,12 @@ html { font-size: 15px; }
   animation: behavior-map-fade-in 280ms ease-out forwards;
 }
 
+.behavior-map-edge--manifest-contains-semantic-area { stroke: rgba(196, 181, 253, 0.56); stroke-width: 1.9; }
 .behavior-map-edge--semantic-area-contains-workflow { stroke: rgba(125, 211, 252, 0.48); }
+.behavior-map-edge--semantic-area-contains-aggregated-workflow { stroke: rgba(251, 191, 36, 0.52); }
 .behavior-map-edge--aggregated-workflow-contains-workflow { stroke: rgba(251, 191, 36, 0.52); stroke-dasharray: 6 5; }
 .behavior-map-edge--workflow-uses-capability { stroke: rgba(245, 158, 11, 0.5); }
+.behavior-map-edge--model-reference { stroke: rgba(148, 163, 184, 0.42); stroke-dasharray: 3 5; }
 
 .behavior-map-node {
   cursor: pointer;
@@ -1829,6 +1832,11 @@ html { font-size: 15px; }
 .behavior-map-node rect {
   stroke-width: 2;
   filter: drop-shadow(0 16px 30px rgba(0, 0, 0, 0.32));
+}
+
+.behavior-map-node--manifest circle {
+  fill: radial-gradient(circle at 35% 30%, rgba(236, 253, 245, 0.3), rgba(14, 165, 233, 0.28));
+  stroke: #f8fafc;
 }
 
 .behavior-map-node--semantic-area circle {
@@ -1846,10 +1854,19 @@ html { font-size: 15px; }
   stroke: #60a5fa;
 }
 
+.behavior-map-node--aggregated circle,
 .behavior-map-node--aggregated rect {
   fill: rgba(245, 158, 11, 0.14);
   stroke: #fbbf24;
   stroke-dasharray: 7 4;
+}
+
+.behavior-map-node--event rect,
+.behavior-map-node--entity rect,
+.behavior-map-node--state-machine rect,
+.behavior-map-node--decision rect {
+  fill: rgba(71, 85, 105, 0.22);
+  stroke: #94a3b8;
 }
 
 .behavior-map-node--capability rect {

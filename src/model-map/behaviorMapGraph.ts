@@ -138,7 +138,7 @@ export function createBehaviorMapGraph(input: CreateBehaviorMapGraphInput): Beha
     }
   }
 
-  return duplicateSharedWorkflowVisualNodes({ nodes: [...nodes.values()], edges: [...edges.values()] });
+  return duplicateSharedVisualNodes({ nodes: [...nodes.values()], edges: [...edges.values()] });
 }
 
 export function toBehaviorMapNodeId(kind: BehaviorMapNodeKind, scope: string, identity: string): string {
@@ -238,13 +238,13 @@ function addEdgeByNodeIds(edges: Map<string, BehaviorMapEdge>, source: string, t
   edges.set(edge.id, edge);
 }
 
-function duplicateSharedWorkflowVisualNodes(graph: BehaviorMapGraph): BehaviorMapGraph {
+function duplicateSharedVisualNodes(graph: BehaviorMapGraph): BehaviorMapGraph {
   const incomingByTarget = new Map<string, BehaviorMapEdge[]>();
   for (const edge of graph.edges) incomingByTarget.set(edge.target, [...(incomingByTarget.get(edge.target) ?? []), edge]);
 
   const duplicateParentsByCanonicalId = new Map<string, string[]>();
   for (const node of graph.nodes) {
-    if (node.kind !== 'workflow' && node.kind !== 'aggregated-workflow') continue;
+    if (!isDuplicableVisualKind(node.kind)) continue;
     const visualParentIds = uniqueSorted((incomingByTarget.get(node.id) ?? []).map((edge) => edge.source));
     if (visualParentIds.length > 1) duplicateParentsByCanonicalId.set(node.id, visualParentIds);
   }
@@ -281,6 +281,11 @@ function duplicateSharedWorkflowVisualNodes(graph: BehaviorMapGraph): BehaviorMa
   }
 
   return { nodes: [...nodes.values()].sort(compareNodes), edges: [...edges.values()].sort(compareEdges) };
+}
+
+
+function isDuplicableVisualKind(kind: BehaviorMapNodeKind): boolean {
+  return kind === 'workflow' || kind === 'aggregated-workflow' || kind === 'capability';
 }
 
 function targetIdsForSource(canonicalTargetId: string, targetParents: readonly string[], canonicalSourceId: string, visualSourceId: string, visualNodeId: (canonicalId: string, visualParentId: string) => string): readonly string[] {

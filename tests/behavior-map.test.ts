@@ -74,16 +74,20 @@ test('behavior map layout assigns finite separated positions and includes node e
   }
 });
 
-test('shared child uses one deterministic primary placement without being moved by another parent', () => {
+test('shared capabilities are visually duplicated per parent while preserving canonical identity', () => {
   const graph = createBehaviorMapGraph({ entityIndex: createPathDerivedEntityIndex(files), referenceIndex, expansion: { expandedNodeIds: expanded } });
-  const layout = layoutBehaviorMapGraph(graph);
-  const capability = layout.nodes.find((node) => node.id === toBehaviorMapNodeId('capability', 'capabilities', 'customer/check_identity'));
-  const onboard = layout.nodes.find((node) => node.id === toBehaviorMapNodeId('aggregated-workflow', 'workflows', 'customer/onboard'));
-  const verify = layout.nodes.find((node) => node.id === toBehaviorMapNodeId('workflow', 'workflows', 'customer/verify'));
+  const canonicalCapabilityId = toBehaviorMapNodeId('capability', 'capabilities', 'customer/check_identity');
+  const visualCapabilityNodes = graph.nodes.filter((node) => node.canonicalId === canonicalCapabilityId);
 
-  assert.ok(capability && onboard && verify);
-  assert.notDeepEqual([capability.x, capability.y], [onboard.x, onboard.y]);
-  assert.notDeepEqual([capability.x, capability.y], [verify.x, verify.y]);
+  assert.equal(visualCapabilityNodes.length, 2);
+  assert.ok(visualCapabilityNodes.every((node) => node.id !== canonicalCapabilityId));
+  assert.deepEqual(visualCapabilityNodes.map((node) => node.visualParentId).sort(), [
+    toBehaviorMapNodeId('aggregated-workflow', 'workflows', 'customer/onboard'),
+    toBehaviorMapNodeId('workflow', 'workflows', 'customer/verify'),
+  ]);
+  assert.ok(graph.edges.some((edge) => edge.kind === 'workflow-uses-capability' && edge.target === `${canonicalCapabilityId}@@parent:${toBehaviorMapNodeId('aggregated-workflow', 'workflows', 'customer/onboard')}`));
+  assert.ok(graph.edges.some((edge) => edge.kind === 'workflow-uses-capability' && edge.target === `${canonicalCapabilityId}@@parent:${toBehaviorMapNodeId('workflow', 'workflows', 'customer/verify')}`));
+  assert.deepEqual(validateBehaviorMapGraph(graph), []);
 });
 
 test('shared workflows are visually duplicated per parent while preserving canonical identity', () => {

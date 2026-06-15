@@ -74,3 +74,26 @@ test('workflow browsing is consolidated into the entity list and actions move to
   assert.doesNotMatch(appSource, /Load example/);
   assert.doesNotMatch(appSource, /ExampleLoader/);
 });
+
+
+test('keeps workspace document and entity view tab strips visible in the workbench', () => {
+  assert.match(appSource, /<div className="workspace-tab-strip" role="tablist" aria-label="Workspace documents">/);
+  assert.match(appSource, /documents\.map\(\(document\) =>/);
+  assert.match(appSource, /<div className="entity-view-tab-strip" role="tablist" aria-label="Entity document views">/);
+  assert.match(appSource, /\{ id: 'source', label: 'Source' \}/);
+  assert.match(appSource, /\{ id: 'relationships', label: 'Relationships' \}/);
+  assert.match(appSource, /\{ id: 'diagram', label: 'Diagram' \}/);
+
+  assert.match(
+    stylesSource,
+    /\.workspace-area\s*{[^}]*display:\s*grid;[^}]*grid-template-rows:\s*(?:39|34)px\s+minmax\(0,\s*1fr\);[^}]*}/s,
+  );
+  assert.match(stylesSource, /\.workspace-tab-strip\s*{[^}]*display:\s*flex;[^}]*}/s);
+  assert.match(
+    stylesSource,
+    /\.entity-document-workspace\s*{[^}]*display:\s*grid;[^}]*grid-template-rows:\s*(?:35|30)px\s+minmax\(0,\s*1fr\);[^}]*}/s,
+  );
+  assert.match(stylesSource, /\.entity-view-tab-strip\s*{[^}]*display:\s*flex;[^}]*}/s);
+  assert.doesNotMatch(stylesSource, /\.workspace-tab-strip,\s*\.entity-view-tab-strip\s*{[^}]*display:\s*none;[^}]*}/s);
+  assert.doesNotMatch(stylesSource, /\.workspace-area,\s*\.entity-document-workspace\s*{[^}]*grid-template-rows:\s*minmax\(0,\s*1fr\);[^}]*}/s);
+});

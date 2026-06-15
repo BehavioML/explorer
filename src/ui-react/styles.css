@@ -1980,10 +1980,6 @@ html { font-size: 15px; }
   color: var(--color-text-muted);
   font-size: 0.74rem;
 }
-.workspace-tab-strip,
-.entity-view-tab-strip { display: none; }
-.workspace-area,
-.entity-document-workspace { grid-template-rows: minmax(0, 1fr); }
 .workspace-content,
 .entity-document-content { background: #f4f6fa; }
 .source-panel,

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   extractUploadedArchive,
+  selectValidationFilesForRoot,
 } from '../adapters/browser';
 import { generateDiagramArtifactForEntity } from '../adapters/generator';
 import { renderMermaidDiagram } from '../adapters/mermaid';
@@ -34,6 +35,7 @@ import {
   type SemanticReferenceViewModel,
   type SourceFileViewModel,
   type ValidationResultViewModel,
+  type ResolvedWorkspaceManifest,
   type WorkspaceFileEntry,
   type WorkspaceOverviewValidationStatus,
   type WorkspaceOverviewViewModel,
@@ -118,6 +120,8 @@ export function App() {
   });
   const [workspaceOverview, setWorkspaceOverview] = useState<WorkspaceOverviewViewModel>();
   const [workspaceFiles, setWorkspaceFiles] = useState<readonly WorkspaceFileEntry[]>([]);
+  const [archiveFiles, setArchiveFiles] = useState<readonly WorkspaceFileEntry[]>([]);
+  const [workspaceManifest, setWorkspaceManifest] = useState<ResolvedWorkspaceManifest>();
   const [entityIndex, setEntityIndex] = useState<PathDerivedEntityIndex>();
   const [selectedEntity, setSelectedEntity] = useState<PathDerivedEntitySelection>();
   const [selectedDiagnostic, setSelectedDiagnostic] = useState<DiagnosticSelection>();
@@ -154,11 +158,17 @@ export function App() {
       readonly files: readonly WorkspaceFileEntry[];
       readonly sourceLabel: string;
       readonly modelRoot: string;
+      readonly archiveFiles?: readonly WorkspaceFileEntry[];
+      readonly manifest?: ResolvedWorkspaceManifest;
+      readonly selectedManifestId?: string;
+      readonly selectedManifestDescription?: string;
     }>,
     unknownErrorMessage: string,
   ) {
     setWorkspaceOverview(undefined);
     setWorkspaceFiles([]);
+    setArchiveFiles([]);
+    setWorkspaceManifest(undefined);
     setEntityIndex(undefined);
     setSelectedEntity(undefined);
     setSelectedDiagnostic(undefined);
@@ -172,6 +182,8 @@ export function App() {
     try {
       const workspace = await extractWorkspace();
       setWorkspaceFiles(workspace.files);
+      setArchiveFiles(workspace.archiveFiles ?? workspace.files);
+      setWorkspaceManifest(workspace.manifest);
       const nextEntityIndex = createPathDerivedEntityIndex(workspace.files);
       setEntityIndex(nextEntityIndex);
       setSelectedEntity(undefined);
@@ -181,6 +193,10 @@ export function App() {
           modelRoot: workspace.modelRoot,
           files: workspace.files,
           validationStatus: 'running',
+          diagnostics: workspace.manifest?.diagnostics,
+          workspaceManifestId: workspace.manifest?.id,
+          selectedManifestId: workspace.selectedManifestId,
+          selectedManifestDescription: workspace.selectedManifestDescription,
         }),
       );
       setWorkspaceDocumentState(createInitialWorkspaceDocumentState());
@@ -190,6 +206,7 @@ export function App() {
       });
 
       const validationResult = await validateInMemoryModelWorkspace(workspace.files);
+      const combinedDiagnostics = [...(workspace.manifest?.diagnostics ?? []), ...(validationResult.status === 'validated' ? validationResult.validation.diagnostics : [])];
 
       if (validationResult.status === 'adapter_error') {
         setWorkspaceOverview(
@@ -198,6 +215,10 @@ export function App() {
             modelRoot: workspace.modelRoot,
             files: workspace.files,
             validationStatus: 'validation_unavailable',
+            diagnostics: workspace.manifest?.diagnostics,
+            workspaceManifestId: workspace.manifest?.id,
+            selectedManifestId: workspace.selectedManifestId,
+            selectedManifestDescription: workspace.selectedManifestDescription,
           }),
         );
         setStatus({ kind: 'error', message: validationResult.error.message });
@@ -209,15 +230,18 @@ export function App() {
           sourceLabel: workspace.sourceLabel,
           modelRoot: workspace.modelRoot,
           files: workspace.files,
-          validation: validationResult.validation,
+          validation: { ...validationResult.validation, diagnostics: combinedDiagnostics, ok: validationResult.validation.ok && !(workspace.manifest?.diagnostics.some((diagnostic) => diagnostic.severity === 'error')) },
+          workspaceManifestId: workspace.manifest?.id,
+          selectedManifestId: workspace.selectedManifestId,
+          selectedManifestDescription: workspace.selectedManifestDescription,
         }),
       );
       setStatus({
         kind: 'validated',
-        message: validationResult.validation.ok
+        message: validationResult.validation.ok && !(workspace.manifest?.diagnostics.some((diagnostic) => diagnostic.severity === 'error'))
           ? 'Validation completed without error diagnostics.'
           : 'Validation completed with diagnostics.',
-        validation: validationResult.validation,
+        validation: { ...validationResult.validation, diagnostics: combinedDiagnostics, ok: validationResult.validation.ok && !(workspace.manifest?.diagnostics.some((diagnostic) => diagnostic.severity === 'error')) },
       });
     } catch (error) {
       setStatus({
@@ -225,6 +249,27 @@ export function App() {
         message: error instanceof Error ? error.message : unknownErrorMessage,
       });
     }
+  }
+
+
+
+  async function handleManifestModelSelected(modelId: string) {
+    const model = workspaceManifest?.models.find((candidate) => candidate.id === modelId);
+    if (!model) return;
+    const files = selectValidationFilesForRoot(archiveFiles, model.modelRoot);
+    await loadWorkspace(
+      `Switching to ${model.id} from manifest...`,
+      async () => ({
+        files,
+        sourceLabel: workspaceOverview?.sourceLabel ?? 'Unknown source',
+        modelRoot: model.modelRoot,
+        archiveFiles,
+        manifest: workspaceManifest,
+        selectedManifestId: model.id,
+        selectedManifestDescription: model.description,
+      }),
+      'Unknown manifest model selection error.',
+    );
   }
 
   const validation = status.kind === 'validated' ? status.validation : undefined;
@@ -598,6 +643,8 @@ export function App() {
         status={status}
         validation={validation}
         workspaceOverview={workspaceOverview}
+        workspaceManifest={workspaceManifest}
+        onManifestModelSelected={handleManifestModelSelected}
         onResize={resizeDiagnosticsPanel}
         onSelectDiagnostic={handleDiagnosticSelected}
         onToggleExpanded={toggleDiagnosticsExpanded}
@@ -1605,6 +1652,8 @@ function DiagnosticsPanel({
   status,
   validation,
   workspaceOverview,
+  workspaceManifest,
+  onManifestModelSelected,
   onResize,
   onSelectDiagnostic,
   onToggleExpanded,
@@ -1615,6 +1664,8 @@ function DiagnosticsPanel({
   readonly status: Status;
   readonly validation: ValidationResultViewModel | undefined;
   readonly workspaceOverview: WorkspaceOverviewViewModel | undefined;
+  readonly workspaceManifest: ResolvedWorkspaceManifest | undefined;
+  readonly onManifestModelSelected: (modelId: string) => void;
   readonly onResize: (delta: number) => void;
   readonly onSelectDiagnostic: (diagnostic: DiagnosticViewModel) => void;
   readonly onToggleExpanded: () => void;
@@ -1642,6 +1693,17 @@ function DiagnosticsPanel({
           </svg>
           <span>Root (workspace): {rootLabel}</span>
         </span>
+        {workspaceManifest && workspaceManifest.models.length > 1 ? (
+          <label className="manifest-model-selector">
+            <span>Model</span>
+            <select value={workspaceOverview?.selectedManifestId ?? ''} onChange={(event) => onManifestModelSelected(event.currentTarget.value)}>
+              {workspaceManifest.models.map((model) => (
+                <option value={model.id} key={`${model.manifestPath}:${model.id}`}>{model.id}</option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        {workspaceOverview?.selectedManifestId ? <span className="diagnostics-status-message">Manifest model: {workspaceOverview.selectedManifestId}</span> : null}
         <span className="diagnostics-status-message">{statusMessage}</span>
         <span className="diagnostics-status-counts" aria-label="Validation diagnostic counts">
           <span className={summary && summary.errors > 0 ? 'diagnostics-count diagnostics-count--error diagnostics-count--active' : 'diagnostics-count diagnostics-count--error'}>{summary?.errors ?? 0} errors</span>
@@ -1841,6 +1903,18 @@ function WorkspaceOverviewLegacy({ overview }: { readonly overview: WorkspaceOve
           <dt>Source</dt>
           <dd>{overview.sourceLabel}</dd>
         </div>
+        {overview.workspaceManifestId ? (
+          <div>
+            <dt>Workspace manifest</dt>
+            <dd>{overview.workspaceManifestId}</dd>
+          </div>
+        ) : null}
+        {overview.selectedManifestId ? (
+          <div>
+            <dt>Selected model</dt>
+            <dd>{overview.selectedManifestId}{overview.selectedManifestDescription ? ` — ${overview.selectedManifestDescription}` : ''}</dd>
+          </div>
+        ) : null}
         <div>
           <dt>Model root</dt>
           <dd>{overview.modelRoot}</dd>

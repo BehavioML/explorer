@@ -2,6 +2,7 @@ export {
   extractArchiveBytes,
   extractUploadedArchive,
   fetchRemoteArchive,
+  selectValidationFilesForRoot,
 } from './archiveInput';
 export {
   canonicalExampleDefinitions,

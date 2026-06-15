@@ -3,6 +3,7 @@ import {
   ApplicationError,
   adapterError,
   detectWorkspaceRoot,
+  resolveWorkspaceManifest,
   notImplemented,
   normalizeWorkspacePath,
   type ArchiveExtractionResult,
@@ -109,6 +110,22 @@ function createExtractedArchiveWorkspace(
   archiveFiles: readonly WorkspaceFileEntry[],
   sourceLabel: string,
 ): ExtractedArchiveWorkspace {
+  const manifest = resolveWorkspaceManifest(archiveFiles);
+  const selectedManifest = manifest?.models[0];
+
+  if (selectedManifest) {
+    const validationFiles = selectValidationFilesForRoot(archiveFiles, selectedManifest.modelRoot);
+    return {
+      files: validationFiles,
+      sourceLabel,
+      modelRoot: selectedManifest.modelRoot,
+      archiveFiles,
+      manifest,
+      selectedManifestId: selectedManifest.id,
+      selectedManifestDescription: selectedManifest.description,
+    };
+  }
+
   const detectedWorkspace = detectWorkspaceRoot(archiveFiles);
   const validationFiles = detectedWorkspace.files.filter(isRelevantValidationFile);
 
@@ -123,7 +140,20 @@ function createExtractedArchiveWorkspace(
     files: validationFiles,
     sourceLabel,
     modelRoot: detectedWorkspace.rootPath,
+    archiveFiles,
+    manifest,
   };
+}
+
+export function selectValidationFilesForRoot(
+  archiveFiles: readonly WorkspaceFileEntry[],
+  modelRoot: string,
+): WorkspaceFileEntry[] {
+  return archiveFiles
+    .filter((file) => normalizeWorkspacePath(file.path).startsWith(modelRoot))
+    .map((file) => ({ ...file, path: normalizeWorkspacePath(file.path).slice(modelRoot.length) }))
+    .filter((file) => file.path.length > 0)
+    .filter(isRelevantValidationFile);
 }
 
 export function extractRegularTextFilesFromZip(zipBytes: Uint8Array): WorkspaceFileEntry[] {

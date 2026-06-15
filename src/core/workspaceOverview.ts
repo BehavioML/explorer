@@ -29,6 +29,9 @@ export interface WorkspaceOverviewViewModel {
   readonly scopeCounts: WorkspaceScopeCounts;
   readonly validationStatus: WorkspaceOverviewValidationStatus;
   readonly diagnosticSummary: DiagnosticSummaryViewModel;
+  readonly workspaceManifestId?: string;
+  readonly selectedManifestId?: string;
+  readonly selectedManifestDescription?: string;
 }
 
 export interface WorkspaceOverviewInput {
@@ -37,6 +40,9 @@ export interface WorkspaceOverviewInput {
   readonly files: readonly WorkspaceFileEntry[];
   readonly validationStatus?: WorkspaceOverviewValidationStatus;
   readonly diagnostics?: readonly DiagnosticViewModel[];
+  readonly workspaceManifestId?: string;
+  readonly selectedManifestId?: string;
+  readonly selectedManifestDescription?: string;
 }
 
 export function createWorkspaceOverview(input: WorkspaceOverviewInput): WorkspaceOverviewViewModel {
@@ -47,6 +53,9 @@ export function createWorkspaceOverview(input: WorkspaceOverviewInput): Workspac
     scopeCounts: countWorkspaceScopes(input.files),
     validationStatus: input.validationStatus ?? 'not_run',
     diagnosticSummary: summarizeDiagnostics(input.diagnostics ?? []),
+    workspaceManifestId: input.workspaceManifestId,
+    selectedManifestId: input.selectedManifestId,
+    selectedManifestDescription: input.selectedManifestDescription,
   };
 }
 
@@ -55,6 +64,9 @@ export function createValidatedWorkspaceOverview(input: {
   readonly modelRoot?: string;
   readonly files: readonly WorkspaceFileEntry[];
   readonly validation: ValidationResultViewModel;
+  readonly workspaceManifestId?: string;
+  readonly selectedManifestId?: string;
+  readonly selectedManifestDescription?: string;
 }): WorkspaceOverviewViewModel {
   return createWorkspaceOverview({
     sourceLabel: input.sourceLabel,
@@ -62,6 +74,9 @@ export function createValidatedWorkspaceOverview(input: {
     files: input.files,
     validationStatus: input.validation.diagnostics.length > 0 ? 'has_diagnostics' : 'valid',
     diagnostics: input.validation.diagnostics,
+    workspaceManifestId: input.workspaceManifestId,
+    selectedManifestId: input.selectedManifestId,
+    selectedManifestDescription: input.selectedManifestDescription,
   });
 }
 

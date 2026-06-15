@@ -13,6 +13,10 @@ export interface ArchiveExtractionResult {
   readonly files: readonly WorkspaceFileEntry[];
   readonly sourceLabel: string;
   readonly modelRoot: string;
+  readonly archiveFiles?: readonly WorkspaceFileEntry[];
+  readonly manifest?: import('./workspaceManifest').ResolvedWorkspaceManifest;
+  readonly selectedManifestId?: string;
+  readonly selectedManifestDescription?: string;
 }
 
 export interface WorkspaceRootDetectionResult {

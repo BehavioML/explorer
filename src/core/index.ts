@@ -92,3 +92,4 @@ export type {
   WorkspaceFileEntry,
   WorkspaceRootDetectionResult,
 } from './workspace';
+export * from './workspaceManifest';

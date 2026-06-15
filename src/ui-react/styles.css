@@ -1830,6 +1830,7 @@ html { font-size: 15px; }
   vector-effect: non-scaling-stroke;
   opacity: 0;
   animation: behavior-map-fade-in 280ms ease-out forwards;
+  transition: opacity 160ms ease, stroke 160ms ease, stroke-width 160ms ease;
 }
 
 .behavior-map-edge--manifest-contains-semantic-area { stroke: rgba(196, 181, 253, 0.56); stroke-width: 1.9; }
@@ -1843,12 +1844,14 @@ html { font-size: 15px; }
   cursor: pointer;
   opacity: 0;
   animation: behavior-map-node-emerge 320ms ease-out forwards;
+  transition: opacity 160ms ease, filter 160ms ease, transform 250ms ease-out;
 }
 
 .behavior-map-node circle,
 .behavior-map-node rect {
   stroke-width: 2;
   filter: drop-shadow(0 16px 30px rgba(0, 0, 0, 0.32));
+  transition: r 180ms ease, fill 160ms ease, stroke 160ms ease, stroke-width 160ms ease, filter 160ms ease;
 }
 
 .behavior-map-node--manifest circle {
@@ -1892,7 +1895,27 @@ html { font-size: 15px; }
 }
 
 .behavior-map-node:hover circle,
-.behavior-map-node:hover rect { stroke-width: 2.6; }
+.behavior-map-node:hover rect,
+.behavior-map-node--hovered circle,
+.behavior-map-node--hovered rect {
+  stroke-width: 3;
+  filter: drop-shadow(0 0 20px rgba(125, 211, 252, 0.42));
+}
+
+.behavior-map-node--neighbor circle,
+.behavior-map-node--neighbor rect,
+.behavior-map-node--child circle,
+.behavior-map-node--child rect {
+  stroke-width: 2.6;
+  filter: drop-shadow(0 0 14px rgba(191, 219, 254, 0.3));
+}
+
+.behavior-map-node--dimmed { opacity: 0.34; }
+.behavior-map-edge--highlighted {
+  opacity: 0.92;
+  stroke-width: 2.6;
+}
+.behavior-map-edge--dimmed { opacity: 0.18; }
 
 .behavior-map-node--selected circle,
 .behavior-map-node--selected rect {
@@ -1925,10 +1948,57 @@ html { font-size: 15px; }
   stroke-width: 3px;
 }
 
+.behavior-map-tooltip {
+  position: fixed;
+  z-index: 40;
+  display: grid;
+  gap: 0.25rem;
+  max-width: 260px;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(191, 219, 254, 0.28);
+  border-radius: 0.75rem;
+  color: #e5eefc;
+  background: rgba(8, 13, 24, 0.94);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  transform: translateY(0);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+.behavior-map-tooltip strong { font-size: 0.88rem; }
+.behavior-map-tooltip span {
+  color: #93c5fd;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.behavior-map-tooltip code {
+  overflow: hidden;
+  color: #cbd5e1;
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.behavior-map-tooltip small { color: #bfdbfe; line-height: 1.35; }
+
 @keyframes behavior-map-fade-in { to { opacity: 1; } }
 @keyframes behavior-map-node-emerge {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .behavior-map-canvas--animating > g,
+  .behavior-map-canvas--animating .behavior-map-node,
+  .behavior-map-canvas--animating .behavior-map-edge,
+  .behavior-map-node,
+  .behavior-map-node circle,
+  .behavior-map-node rect,
+  .behavior-map-edge,
+  .behavior-map-tooltip {
+    transition: none;
+    animation-duration: 1ms;
+  }
 }
 
 /* Mockup convergence pass: cleaner dashboard chrome and consolidated action surface. */
@@ -2096,7 +2166,7 @@ html { font-size: 15px; }
 @media (max-width: 1180px) { .entity-dashboard-card-grid { grid-template-columns: 1fr; } .entity-dashboard-card--wide { grid-column: auto; } }
 
 .workbench-shell--map-focus-mode .workbench-body {
-  grid-template-columns: minmax(0, 1fr) var(--resize-handle-size) minmax(280px, var(--inspector-width));
+  grid-template-columns: var(--rail-width) minmax(0, 1fr) var(--resize-handle-size) minmax(280px, var(--inspector-width));
   min-width: 0;
   min-height: 0;
   overflow: hidden;

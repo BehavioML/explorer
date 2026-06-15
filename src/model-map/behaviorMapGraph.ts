@@ -201,10 +201,52 @@ function addNode(nodes: Map<string, BehaviorMapNode>, node: BehaviorMapNode) {
 }
 
 function addEdge(edges: Map<string, BehaviorMapEdge>, source: PathDerivedModelEntity, target: PathDerivedModelEntity, kind: BehaviorMapEdgeKind, sourceField: string) {
-  const sourceKind = source.scope === 'semantic-areas' ? 'semantic-area' : 'workflow';
-  const targetKind = target.scope === 'capabilities' ? 'capability' : 'workflow';
-  const edge = { id: `${kind}:${source.scope}/${source.identity}->${target.scope}/${target.identity}:${sourceField}`, source: toNodeId(sourceKind, source), target: toNodeId(targetKind, target), kind, explicit: true as const, sourceField };
+  const sourceKind = nodeKindForScope(source.scope);
+  const targetKind = nodeKindForScope(target.scope);
+  if (!sourceKind || !targetKind) return;
+
+  const edge = {
+    id: `${kind}:${source.scope}/${source.identity}->${target.scope}/${target.identity}:${sourceField}`,
+    source: toNodeId(sourceKind, source),
+    target: toNodeId(targetKind, target),
+    kind,
+    explicit: true as const,
+    sourceField,
+  };
   edges.set(edge.id, edge);
+}
+
+function nodeKindForScope(scope: string): BehaviorMapNodeKind | undefined {
+  if (scope === 'semantic-areas') return 'semantic-area';
+  if (scope === 'workflows') return 'workflow';
+  if (scope === 'capabilities') return 'capability';
+  return undefined;
+}
+
+export function validateBehaviorMapGraph(graph: BehaviorMapGraph, artifactRefs?: ReadonlySet<string>): string[] {
+  const problems: string[] = [];
+  const nodeIds = new Set<string>();
+  const edgeIds = new Set<string>();
+
+  for (const node of graph.nodes) {
+    if (nodeIds.has(node.id)) problems.push(`duplicate node id: ${node.id}`);
+    nodeIds.add(node.id);
+
+    const parsed = parseBehaviorMapRef(node.ref);
+    if (!parsed) problems.push(`invalid node ref: ${node.id} -> ${node.ref}`);
+    else if (nodeKindForScope(parsed.scope) !== node.kind) problems.push(`node kind/scope mismatch: ${node.id} -> ${node.ref}`);
+
+    if (artifactRefs && !artifactRefs.has(node.ref)) problems.push(`node ref missing artifact: ${node.id} -> ${node.ref}`);
+  }
+
+  for (const edge of graph.edges) {
+    if (edgeIds.has(edge.id)) problems.push(`duplicate edge id: ${edge.id}`);
+    edgeIds.add(edge.id);
+    if (!nodeIds.has(edge.source)) problems.push(`edge source missing node: ${edge.id} -> ${edge.source}`);
+    if (!nodeIds.has(edge.target)) problems.push(`edge target missing node: ${edge.id} -> ${edge.target}`);
+  }
+
+  return problems;
 }
 
 function summarizeDiagnostics(diagnostics: readonly DiagnosticViewModel[], entities: readonly PathDerivedModelEntity[]) {

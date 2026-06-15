@@ -1823,8 +1823,6 @@ html { font-size: 15px; }
   cursor: pointer;
   opacity: 0;
   animation: behavior-map-node-emerge 320ms ease-out forwards;
-  transform-box: fill-box;
-  transform-origin: center;
 }
 
 .behavior-map-node circle,
@@ -1895,8 +1893,8 @@ html { font-size: 15px; }
 
 @keyframes behavior-map-fade-in { to { opacity: 1; } }
 @keyframes behavior-map-node-emerge {
-  from { opacity: 0; transform: scale(0.86); }
-  to { opacity: 1; transform: scale(1); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* Mockup convergence pass: cleaner dashboard chrome and consolidated action surface. */

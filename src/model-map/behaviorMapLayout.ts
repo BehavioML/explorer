@@ -8,6 +8,7 @@ export interface BehaviorMapLayoutNode extends BehaviorMapNode {
   readonly height: number;
   readonly shape: 'circle' | 'pill';
   readonly expanded: boolean;
+  readonly displayLines: readonly string[];
 }
 
 export interface BehaviorMapLayoutEdge extends BehaviorMapEdge {
@@ -17,133 +18,187 @@ export interface BehaviorMapLayoutEdge extends BehaviorMapEdge {
   readonly targetY: number;
 }
 
+export interface BehaviorMapBounds { readonly minX: number; readonly minY: number; readonly maxX: number; readonly maxY: number }
+
 export interface BehaviorMapLayout {
   readonly nodes: readonly BehaviorMapLayoutNode[];
   readonly edges: readonly BehaviorMapLayoutEdge[];
   readonly width: number;
   readonly height: number;
+  readonly bounds: BehaviorMapBounds;
 }
 
-const CANVAS_WIDTH = 1400;
-const CANVAS_HEIGHT = 860;
-const AREA_COLUMNS = 3;
-const AREA_COLUMN_GAP = 360;
-const AREA_ROW_GAP = 260;
-const CHILD_X_GAP = 230;
-const CHILD_Y_GAP = 64;
-const CHILD_WRAP_COUNT = 8;
+type ChildPlacement = { childId: string; edge: BehaviorMapEdge };
+
+const ROOT_X = 220;
+const ROOT_Y = 180;
+const SEMANTIC_AREA_GAP_Y = 190;
+const BRANCH_X_GAP = 300;
+const PILL_GAP_Y = 58;
+const COLUMN_GAP_X = 280;
+const WRAP_COUNT = 8;
+const BOUNDS_MARGIN = 120;
+
+const EDGE_KIND_PRIORITY: Record<BehaviorMapEdge['kind'], number> = {
+  'semantic-area-contains-workflow': 0,
+  'aggregated-workflow-contains-workflow': 1,
+  'workflow-uses-capability': 2,
+};
 
 export function layoutBehaviorMapGraph(graph: BehaviorMapGraph): BehaviorMapLayout {
-  const childIdsByParent = groupTargetsBySource(graph.edges);
-  const edgeByTarget = new Map(graph.edges.map((edge) => [edge.target, edge]));
+  const childPlacementsByParent = groupChildPlacementsBySource(graph.edges);
   const positioned = new Map<string, BehaviorMapLayoutNode>();
   const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
   const semanticAreas = graph.nodes.filter((node) => node.kind === 'semantic-area').sort(compareByRef);
+  const placedNodeIds = new Set<string>();
 
   semanticAreas.forEach((node, index) => {
-    const column = index % AREA_COLUMNS;
-    const row = Math.floor(index / AREA_COLUMNS);
-    const expanded = hasChildren(node.id, childIdsByParent);
-    positioned.set(
-      node.id,
-      toLayoutNode(
-        node,
-        190 + column * AREA_COLUMN_GAP,
-        170 + row * AREA_ROW_GAP,
-        expanded,
-      ),
-    );
+    positioned.set(node.id, toLayoutNode(node, ROOT_X, ROOT_Y + index * SEMANTIC_AREA_GAP_Y, hasChildren(node.id, childPlacementsByParent)));
+    placedNodeIds.add(node.id);
   });
 
   for (const area of semanticAreas) {
-    placeDescendants(area.id, nodesById, childIdsByParent, edgeByTarget, positioned);
+    placeDescendants(area.id, nodesById, childPlacementsByParent, positioned, placedNodeIds, new Set([area.id]));
   }
 
   const edges = graph.edges.flatMap((edge) => {
     const source = positioned.get(edge.source);
     const target = positioned.get(edge.target);
-    return source && target
-      ? [{ ...edge, ...edgeEndpoints(source, target) }]
-      : [];
+    return source && target ? [{ ...edge, ...edgeEndpoints(source, target) }] : [];
   });
-
-  const bounds = [...positioned.values()].reduce(
-    (current, node) => ({
-      minX: Math.min(current.minX, node.x - node.width / 2 - 80),
-      maxX: Math.max(current.maxX, node.x + node.width / 2 + 120),
-      minY: Math.min(current.minY, node.y - node.height / 2 - 80),
-      maxY: Math.max(current.maxY, node.y + node.height / 2 + 80),
-    }),
-    { minX: 0, minY: 0, maxX: CANVAS_WIDTH, maxY: CANVAS_HEIGHT },
-  );
+  const bounds = computeBounds([...positioned.values()]);
 
   return {
     nodes: [...positioned.values()].sort((a, b) => a.id.localeCompare(b.id)),
     edges,
     width: Math.ceil(bounds.maxX - Math.min(0, bounds.minX)),
     height: Math.ceil(bounds.maxY - Math.min(0, bounds.minY)),
+    bounds,
   };
 }
 
 function placeDescendants(
   parentId: string,
   nodesById: ReadonlyMap<string, BehaviorMapNode>,
-  childIdsByParent: ReadonlyMap<string, readonly string[]>,
-  edgeByTarget: ReadonlyMap<string, BehaviorMapEdge>,
+  childPlacementsByParent: ReadonlyMap<string, readonly ChildPlacement[]>,
   positioned: Map<string, BehaviorMapLayoutNode>,
+  placedNodeIds: Set<string>,
+  pathNodeIds: ReadonlySet<string>,
 ) {
   const parent = positioned.get(parentId);
   if (!parent) return;
 
-  const children = (childIdsByParent.get(parentId) ?? [])
-    .map((id) => nodesById.get(id))
-    .filter((node): node is BehaviorMapNode => Boolean(node))
-    .sort(compareByRef);
+  const children = (childPlacementsByParent.get(parentId) ?? [])
+    .filter((placement) => nodesById.has(placement.childId))
+    .sort((a, b) => comparePlacements(a, b, nodesById));
   if (children.length === 0) return;
 
-  const rows = Math.min(CHILD_WRAP_COUNT, children.length);
-  const blockHeight = (rows - 1) * CHILD_Y_GAP;
+  const rows = Math.min(WRAP_COUNT, children.length);
+  const blockHeight = (rows - 1) * PILL_GAP_Y;
+  const newlyPlacedChildIds: string[] = [];
 
-  children.forEach((node, index) => {
-    const column = Math.floor(index / CHILD_WRAP_COUNT);
-    const row = index % CHILD_WRAP_COUNT;
-    const relationship = edgeByTarget.get(node.id)?.kind;
-    const isCapabilityBranch = relationship === 'workflow-uses-capability';
-    const x = parent.x + CHILD_X_GAP + column * (isCapabilityBranch ? 230 : 260);
-    const curveOffset = children.length > 2 ? Math.sin((row / Math.max(rows - 1, 1)) * Math.PI) * 22 : 0;
-    const y = parent.y - blockHeight / 2 + row * CHILD_Y_GAP + curveOffset + (column % 2) * 28;
-    positioned.set(node.id, toLayoutNode(node, x, y, hasChildren(node.id, childIdsByParent)));
+  children.forEach((placement, index) => {
+    if (placedNodeIds.has(placement.childId) || pathNodeIds.has(placement.childId)) return;
+    const node = nodesById.get(placement.childId);
+    if (!node) return;
+    const column = Math.floor(index / WRAP_COUNT);
+    const row = index % WRAP_COUNT;
+    const x = parent.x + BRANCH_X_GAP + column * COLUMN_GAP_X;
+    const y = parent.y - blockHeight / 2 + row * PILL_GAP_Y;
+    positioned.set(node.id, toLayoutNode(node, x, y, hasChildren(node.id, childPlacementsByParent)));
+    placedNodeIds.add(node.id);
+    newlyPlacedChildIds.push(node.id);
   });
 
-  for (const node of children) {
-    placeDescendants(node.id, nodesById, childIdsByParent, edgeByTarget, positioned);
+  for (const childId of newlyPlacedChildIds) {
+    placeDescendants(childId, nodesById, childPlacementsByParent, positioned, placedNodeIds, new Set([...pathNodeIds, childId]));
   }
 }
 
-function groupTargetsBySource(edges: readonly BehaviorMapEdge[]): Map<string, string[]> {
-  const groups = new Map<string, string[]>();
-  for (const edge of edges) groups.set(edge.source, [...(groups.get(edge.source) ?? []), edge.target].sort());
+function groupChildPlacementsBySource(edges: readonly BehaviorMapEdge[]): Map<string, ChildPlacement[]> {
+  const groups = new Map<string, ChildPlacement[]>();
+  for (const edge of [...edges].sort(compareEdgesForPlacement)) {
+    groups.set(edge.source, [...(groups.get(edge.source) ?? []), { childId: edge.target, edge }]);
+  }
   return groups;
 }
 
 function toLayoutNode(node: BehaviorMapNode, x: number, y: number, expanded: boolean): BehaviorMapLayoutNode {
   const shape = node.kind === 'semantic-area' ? 'circle' : 'pill';
-  const radius = node.kind === 'semantic-area' ? (expanded ? 34 : 56 + Math.min(46, node.sizeWeight * 7)) : 0;
-  const width = shape === 'pill' ? Math.max(node.kind === 'capability' ? 140 : 172, node.label.length * 7.2 + (node.workflowSubtype === 'aggregated' ? 94 : 46)) : radius * 2;
-  const height = shape === 'pill' ? (node.kind === 'capability' ? 38 : 44) : radius * 2;
-  return { ...node, x: Math.round(x), y: Math.round(y), radius, width: Math.round(width), height, shape, expanded };
+  const displayLines = labelLines(node);
+  const radius = node.kind === 'semantic-area' ? (expanded ? 48 : 64) : 0;
+  const width = shape === 'pill' ? (node.kind === 'capability' ? 190 : 220) : radius * 2;
+  const height = shape === 'pill' ? (displayLines.length > 1 || node.workflowSubtype === 'aggregated' ? 52 : 44) : radius * 2;
+  return { ...node, x: Math.round(x), y: Math.round(y), radius, width, height, shape, expanded, displayLines };
+}
+
+function labelLines(node: BehaviorMapNode): readonly string[] {
+  if (node.kind === 'semantic-area') return wrapText(node.label, 16, 2);
+  const tail = node.label || node.ref.split('/').at(-1) || node.ref;
+  return wrapText(tail, node.kind === 'capability' ? 22 : 24, 2);
+}
+
+function wrapText(value: string, maxLength: number, maxLines: number): readonly string[] {
+  const normalized = value.replace(/[_-]+/g, ' ').trim() || value;
+  if (normalized.length <= maxLength) return [normalized];
+  const words = normalized.split(/\s+/);
+  const lines: string[] = [];
+  let line = '';
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (next.length <= maxLength) line = next;
+    else {
+      if (line) lines.push(line);
+      line = word;
+    }
+    if (lines.length === maxLines) break;
+  }
+  if (lines.length < maxLines && line) lines.push(line);
+  const clipped = lines.slice(0, maxLines);
+  const originalText = words.join(' ');
+  if (clipped.join(' ').length < originalText.length && clipped.length > 0) clipped[clipped.length - 1] = `${clipped[clipped.length - 1].slice(0, Math.max(1, maxLength - 1))}…`;
+  return clipped;
 }
 
 function edgeEndpoints(source: BehaviorMapLayoutNode, target: BehaviorMapLayoutNode) {
-  const sourceX = source.shape === 'pill' ? source.x + source.width / 2 : source.x + source.radius;
-  const targetX = target.shape === 'pill' ? target.x - target.width / 2 : target.x - target.radius;
-  return { sourceX, sourceY: source.y, targetX, targetY: target.y };
+  const leftToRight = target.x >= source.x;
+  const sourceHalfWidth = source.shape === 'pill' ? source.width / 2 : source.radius;
+  const targetHalfWidth = target.shape === 'pill' ? target.width / 2 : target.radius;
+  return {
+    sourceX: source.x + (leftToRight ? sourceHalfWidth : -sourceHalfWidth),
+    sourceY: source.y,
+    targetX: target.x + (leftToRight ? -targetHalfWidth : targetHalfWidth),
+    targetY: target.y,
+  };
 }
 
-function hasChildren(id: string, childIdsByParent: ReadonlyMap<string, readonly string[]>): boolean {
-  return Boolean(childIdsByParent.get(id)?.length);
+function computeBounds(nodes: readonly BehaviorMapLayoutNode[]): BehaviorMapBounds {
+  if (nodes.length === 0) return { minX: 0, minY: 0, maxX: 1400, maxY: 860 };
+  return nodes.reduce(
+    (bounds, node) => {
+      const halfWidth = node.shape === 'pill' ? node.width / 2 : node.radius;
+      const halfHeight = node.shape === 'pill' ? node.height / 2 : node.radius;
+      return {
+        minX: Math.min(bounds.minX, node.x - halfWidth - BOUNDS_MARGIN),
+        minY: Math.min(bounds.minY, node.y - halfHeight - BOUNDS_MARGIN),
+        maxX: Math.max(bounds.maxX, node.x + halfWidth + BOUNDS_MARGIN),
+        maxY: Math.max(bounds.maxY, node.y + halfHeight + BOUNDS_MARGIN),
+      };
+    },
+    { minX: Number.POSITIVE_INFINITY, minY: Number.POSITIVE_INFINITY, maxX: Number.NEGATIVE_INFINITY, maxY: Number.NEGATIVE_INFINITY },
+  );
 }
 
-function compareByRef(a: BehaviorMapNode, b: BehaviorMapNode) {
-  return a.ref.localeCompare(b.ref);
+function hasChildren(id: string, childPlacementsByParent: ReadonlyMap<string, readonly ChildPlacement[]>): boolean {
+  return Boolean(childPlacementsByParent.get(id)?.length);
 }
+
+function comparePlacements(a: ChildPlacement, b: ChildPlacement, nodesById: ReadonlyMap<string, BehaviorMapNode>) {
+  return compareEdgesForPlacement(a.edge, b.edge) || (nodesById.get(a.childId)?.ref ?? a.childId).localeCompare(nodesById.get(b.childId)?.ref ?? b.childId);
+}
+
+function compareEdgesForPlacement(a: BehaviorMapEdge, b: BehaviorMapEdge) {
+  return EDGE_KIND_PRIORITY[a.kind] - EDGE_KIND_PRIORITY[b.kind] || a.source.localeCompare(b.source) || a.target.localeCompare(b.target) || a.id.localeCompare(b.id);
+}
+
+function compareByRef(a: BehaviorMapNode, b: BehaviorMapNode) { return a.ref.localeCompare(b.ref); }

@@ -64,6 +64,14 @@ test('behavior map layout assigns finite separated positions and includes node e
     assert.ok(layout.bounds.minY <= node.y - halfHeight);
     assert.ok(layout.bounds.maxY >= node.y + halfHeight);
   }
+
+  for (const edge of layout.edges) {
+    const source = layout.nodes.find((node) => node.id === edge.source);
+    const target = layout.nodes.find((node) => node.id === edge.target);
+    assert.ok(source && target);
+    assertEndpointTouchesNodeBorder(source, edge.sourceX, edge.sourceY);
+    assertEndpointTouchesNodeBorder(target, edge.targetX, edge.targetY);
+  }
 });
 
 test('shared child uses one deterministic primary placement without being moved by another parent', () => {
@@ -85,6 +93,18 @@ function assertDistinctSiblingPositions(nodes: readonly BehaviorMapLayoutNode[],
     return `${node.x},${node.y}`;
   });
   assert.equal(new Set(positions).size, positions.length);
+}
+
+function assertEndpointTouchesNodeBorder(node: BehaviorMapLayoutNode, x: number, y: number) {
+  const dx = Math.abs(x - node.x);
+  const dy = Math.abs(y - node.y);
+  if (node.shape === 'circle') {
+    assert.ok(Math.abs(Math.hypot(dx, dy) - node.radius) <= 1.1, `circle endpoint for ${node.id} should be on the visible radius`);
+    return;
+  }
+  assert.ok(dx <= node.width / 2 + 1.1, `pill endpoint x for ${node.id} should not overshoot width`);
+  assert.ok(dy <= node.height / 2 + 1.1, `pill endpoint y for ${node.id} should not overshoot height`);
+  assert.ok(Math.abs(dx - node.width / 2) <= 1.1 || Math.abs(dy - node.height / 2) <= 1.1, `pill endpoint for ${node.id} should touch a visible edge`);
 }
 
 function file(path: string): WorkspaceFileEntry { return { path, content: '' }; }

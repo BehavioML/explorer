@@ -319,6 +319,17 @@ export function App() {
     setWorkspaceDocumentState((state) => openEntityWorkspaceDocument(state, selection, 'source'));
   }
 
+  function handleMapEntitySelected(selection: PathDerivedEntitySelection) {
+    if (!selection) {
+      return;
+    }
+
+    setSelectedEntity(selection);
+    setSelectedDiagnostic(undefined);
+    setSelectedSearchResult(undefined);
+    setWorkspaceDocumentState((state) => openEntityWorkspaceDocument(state, selection, 'source'));
+  }
+
   function handleDiagramWorkflowSelected(selection: PathDerivedEntitySelection) {
     if (!selection) {
       return;
@@ -575,24 +586,28 @@ export function App() {
           onCloseDocument={handleWorkspaceDocumentClosed}
           onSelectDocument={handleWorkspaceDocumentSelected}
           onSelectEntityView={handleEntityDocumentViewSelected}
-          onSelectMapEntityFromView={handleEntitySelected}
+          onSelectMapEntityFromView={handleMapEntitySelected}
           onWorkflowCompositionModeChanged={setWorkflowCompositionMode}
         />
-        <ResizeHandle
-          orientation="vertical"
-          label="Resize Inspector panel"
-          onResize={resizeInspectorPanel}
-        />
-        <InspectorPanel
-          entity={selected}
-          relationships={selectedRelationships}
-          selectedDiagnostic={selectedDiagnostic}
-          selectedDiagnostics={selectedDiagnostics}
-          selectedSearchResult={selectedSearchResult}
-          sourceView={sourceView}
-          validation={validation}
-          diagramView={displayedDiagramView}
-        />
+        {activeActivity === 'map' && !selected ? null : (
+          <ResizeHandle
+            orientation="vertical"
+            label="Resize Inspector panel"
+            onResize={resizeInspectorPanel}
+          />
+        )}
+        {activeActivity === 'map' && !selected ? null : (
+          <InspectorPanel
+            entity={selected}
+            relationships={selectedRelationships}
+            selectedDiagnostic={selectedDiagnostic}
+            selectedDiagnostics={selectedDiagnostics}
+            selectedSearchResult={selectedSearchResult}
+            sourceView={sourceView}
+            validation={validation}
+            diagramView={displayedDiagramView}
+          />
+        )}
       </div>
 
       <DiagnosticsPanel

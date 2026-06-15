@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
-  canonicalExampleDefinitions,
   extractUploadedArchive,
-  loadCanonicalExampleWorkspace,
-  type CanonicalExampleId,
 } from '../adapters/browser';
 import { generateDiagramArtifactForEntity } from '../adapters/generator';
 import { renderMermaidDiagram } from '../adapters/mermaid';
@@ -62,20 +59,9 @@ type Status =
 
 type ActivityMode = 'explorer' | 'search' | 'validation' | 'diagrams' | 'relationships' | 'map';
 
-const activityItems: readonly {
-  readonly id: ActivityMode;
-  readonly label: string;
-}[] = [
-  { id: 'explorer', label: 'Explorer' },
-  { id: 'search', label: 'Search' },
-  { id: 'validation', label: 'Validation' },
-  { id: 'diagrams', label: 'Diagrams' },
-  { id: 'relationships', label: 'Relationships' },
-  { id: 'map', label: 'Map' },
-];
-
 type ModelElementCategory =
   | 'overview'
+  | 'map'
   | 'workflows'
   | 'capabilities'
   | 'decisions'
@@ -94,6 +80,7 @@ const modelElementCategories: readonly {
   readonly scope?: ModelEntityScope;
 }[] = [
   { id: 'overview', label: 'Overview' },
+  { id: 'map', label: 'Map' },
   { id: 'workflows', label: 'Workflows', scope: 'workflows' },
   { id: 'roles', label: 'Roles', scope: 'roles' },
   { id: 'capabilities', label: 'Capabilities', scope: 'capabilities' },
@@ -158,16 +145,6 @@ export function App() {
       `Extracting ${file.name} in the browser...`,
       () => extractUploadedArchive({ kind: 'uploaded_archive', file }),
       'Unknown archive loading error.',
-    );
-  }
-
-  async function handleExampleSelected(exampleId: CanonicalExampleId) {
-    const example = canonicalExampleDefinitions.find((definition) => definition.id === exampleId);
-
-    await loadWorkspace(
-      `Fetching ${example?.label ?? exampleId} from BehavioML/specifications...`,
-      () => loadCanonicalExampleWorkspace(exampleId),
-      'Unknown example loading error.',
     );
   }
 
@@ -502,7 +479,6 @@ export function App() {
         workspaceFiles={workspaceFiles}
         workspaceOverview={workspaceOverview}
         onArchiveSelected={handleArchiveSelected}
-        onExampleSelected={handleExampleSelected}
         onDiagnosticSelected={handleDiagnosticSelected}
         onEntitySelected={handleEntitySelected}
         onSearchQueryChanged={handleSearchQueryChanged}
@@ -525,14 +501,11 @@ export function App() {
       aria-label="BehavioML Explorer workbench"
     >
       <TopBar
-        activeActivity={activeActivity}
         searchText={searchText}
         status={status}
         workspaceOverview={workspaceOverview}
         onArchiveSelected={handleArchiveSelected}
-        onExampleSelected={handleExampleSelected}
         onSearchChange={handleSearchQueryChanged}
-        onSelectActivity={setActiveActivity}
       />
 
       <div className="workbench-body">
@@ -540,7 +513,10 @@ export function App() {
           activeCategory={activeModelCategory}
           index={entityIndex}
           isExpanded={isModelRailExpanded}
-          onSelectCategory={setActiveModelCategory}
+          onSelectCategory={(category) => {
+            setActiveModelCategory(category);
+            setActiveActivity(category === 'map' ? 'map' : 'explorer');
+          }}
           onToggleExpanded={() => setModelRailExpanded((expanded) => !expanded)}
         />
         <ExplorerPanel
@@ -606,6 +582,11 @@ export function App() {
             sourceView={sourceView}
             validation={validation}
             diagramView={displayedDiagramView}
+            onOpenDiagrams={() => setActiveActivity('diagrams')}
+            onExploreWorkflows={() => { setActiveModelCategory('workflows'); setActiveActivity('explorer'); }}
+            onViewDiagnostics={() => setDiagnosticsExpanded(true)}
+            onRefreshWorkspace={() => window.location.reload()}
+            onShowMap={() => { setActiveModelCategory('map'); setActiveActivity('map'); }}
           />
         )}
       </div>
@@ -709,6 +690,7 @@ function ModelElementIcon({
   return (
     <svg className="model-element-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       {category === 'menu' ? <path d="M4 7h16M4 12h16M4 17h16" /> : null}
+      {category === 'map' ? <path d="M6 6a3 3 0 1 0 .1 0M18 7a3 3 0 1 0 .1 0M12 17a3 3 0 1 0 .1 0M8.5 7h6M7.5 9l3 6M16.5 10l-3 5" /> : null}
       {category === 'overview' ? <path d="M4 5.5h6l1.5 2H20v11H4zM4 8h16" /> : null}
       {category === 'workflows' ? <path d="M6 6h4v4H6zM14 14h4v4h-4zM10 8h2.5A3.5 3.5 0 0 1 16 11.5V14" /> : null}
       {category === 'capabilities' ? <path d="M12 4v3M12 17v3M4 12h3M17 12h3M8.5 8.5 6.4 6.4M15.5 15.5l2.1 2.1M15.5 8.5l2.1-2.1M8.5 15.5l-2.1 2.1M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0" /> : null}
@@ -726,23 +708,17 @@ function ModelElementIcon({
 }
 
 function TopBar({
-  activeActivity,
   searchText,
   status,
   workspaceOverview,
   onArchiveSelected,
-  onExampleSelected,
   onSearchChange,
-  onSelectActivity,
 }: {
-  readonly activeActivity: ActivityMode;
   readonly searchText: string;
   readonly status: Status;
   readonly workspaceOverview: WorkspaceOverviewViewModel | undefined;
   readonly onArchiveSelected: (file: File | undefined) => void;
-  readonly onExampleSelected: (exampleId: CanonicalExampleId) => void;
   readonly onSearchChange: (query: string) => void;
-  readonly onSelectActivity: (activity: ActivityMode) => void;
 }) {
   return (
     <header className="top-bar">
@@ -756,7 +732,6 @@ function TopBar({
         </div>
       </div>
 
-      <TopActivityNav activeActivity={activeActivity} onSelectActivity={onSelectActivity} />
 
       <label className="top-search">
         <span className="visually-hidden">Search loaded workspace</span>
@@ -769,89 +744,20 @@ function TopBar({
         />
       </label>
 
-      <div className="top-load-actions" aria-label="Workspace load actions">
-        <label className="top-load-button">
-          <span>{status.kind === 'loading' ? 'Loading...' : 'Load archive'}</span>
-          <input
-            type="file"
-            accept=".tgz,.tar.gz,.zip,application/gzip,application/zip"
-            disabled={status.kind === 'loading'}
-            onChange={(event) => void onArchiveSelected(event.currentTarget.files?.[0])}
-          />
-        </label>
-        <ExampleLoader disabled={status.kind === 'loading'} onExampleSelected={onExampleSelected} />
-      </div>
+      {!workspaceOverview ? (
+        <div className="top-load-actions" aria-label="Workspace load actions">
+          <label className="top-load-button">
+            <span>{status.kind === 'loading' ? 'Loading...' : 'Load archive'}</span>
+            <input
+              type="file"
+              accept=".tgz,.tar.gz,.zip,application/gzip,application/zip"
+              disabled={status.kind === 'loading'}
+              onChange={(event) => void onArchiveSelected(event.currentTarget.files?.[0])}
+            />
+          </label>
+        </div>
+      ) : null}
     </header>
-  );
-}
-
-function ExampleLoader({
-  disabled,
-  onExampleSelected,
-}: {
-  readonly disabled: boolean;
-  readonly onExampleSelected: (exampleId: CanonicalExampleId) => void;
-}) {
-  const [selectedExampleId, setSelectedExampleId] = useState<CanonicalExampleId>(
-    canonicalExampleDefinitions[0].id,
-  );
-
-  return (
-    <form
-      className="example-loader"
-      aria-label="Load built-in BehavioML example"
-      onSubmit={(event) => {
-        event.preventDefault();
-        onExampleSelected(selectedExampleId);
-      }}
-    >
-      <label>
-        <span className="visually-hidden">Built-in example</span>
-        <select
-          value={selectedExampleId}
-          disabled={disabled}
-          onChange={(event) => setSelectedExampleId(event.currentTarget.value as CanonicalExampleId)}
-        >
-          {canonicalExampleDefinitions.map((example) => (
-            <option value={example.id} key={example.id}>
-              {example.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <button type="submit" disabled={disabled}>
-        Load example
-      </button>
-    </form>
-  );
-}
-
-function TopActivityNav({
-  activeActivity,
-  onSelectActivity,
-}: {
-  readonly activeActivity: ActivityMode;
-  readonly onSelectActivity: (activity: ActivityMode) => void;
-}) {
-  return (
-    <nav className="top-activity-nav" aria-label="Global explorer views">
-      {activityItems.map((item) => (
-        <button
-          className={
-            activeActivity === item.id ? 'top-activity-button top-activity-button--active' : 'top-activity-button'
-          }
-          type="button"
-          aria-label={item.label}
-          aria-pressed={activeActivity === item.id}
-          title={item.label}
-          key={item.id}
-          onClick={() => onSelectActivity(item.id)}
-        >
-          <ActivityIcon activity={item.id} />
-          <span className="visually-hidden">{item.label}</span>
-        </button>
-      ))}
-    </nav>
   );
 }
 
@@ -955,18 +861,15 @@ function ExplorerPanel({
 }) {
   return (
     <aside className="explorer-panel" aria-label="Explorer panel">
-      <div className="panel-heading">
-        <p className="eyebrow">
-          {activeActivity === 'explorer'
-            ? formatModelCategoryTitle(activeModelCategory).toUpperCase()
-            : formatActivityTitle(activeActivity)}
-        </p>
-        <h2>
-          {activeActivity === 'explorer'
-            ? formatModelCategoryTitle(activeModelCategory)
-            : formatActivityTitle(activeActivity)}
-        </h2>
-      </div>
+      {activeActivity !== 'map' ? (
+        <div className="panel-heading panel-heading--list">
+          <h2>{activeActivity === 'explorer' ? formatModelCategoryTitle(activeModelCategory) : formatActivityTitle(activeActivity)}{activeActivity === 'explorer' && getCategoryScope(activeModelCategory) ? <span className="entity-count-badge">{getModelCategoryCount(index, getCategoryScope(activeModelCategory)!)}</span> : null}</h2>
+        </div>
+      ) : null}
+
+      {activeActivity === 'map' ? (
+        <PlaceholderPanel title="Map" message="Use the right-side actions panel to show the model map." />
+      ) : null}
 
       {activeActivity === 'explorer' ? (
         activeModelCategory === 'overview' ? (
@@ -1045,9 +948,7 @@ function OverviewModelCategoryPanel({
 
 function DiagramsActivityPanel({
   index,
-  selectedEntity,
   workspaceOverview,
-  onSelectWorkflow,
 }: {
   readonly index: PathDerivedEntityIndex | undefined;
   readonly selectedEntity: PathDerivedEntitySelection;
@@ -1055,45 +956,16 @@ function DiagramsActivityPanel({
   readonly onSelectWorkflow: (selection: PathDerivedEntitySelection) => void;
 }) {
   if (!workspaceOverview || !index) {
-    return <PlaceholderPanel title="Diagrams" message="Load a workspace to browse workflow sequence diagrams." />;
+    return <PlaceholderPanel title="Diagrams" message="Load a workspace to open Generator-backed diagrams." />;
   }
 
-  const workflows = index.entities.filter((entity) => entity.scope === 'workflows');
-
-  if (workflows.length === 0) {
-    return (
-      <PlaceholderPanel
-        title="Diagrams"
-        message="No workflow entities were found. Generator-backed sequence diagrams are available from workflow source files."
-      />
-    );
-  }
+  const workflowCount = index.entities.filter((entity) => entity.scope === 'workflows').length;
 
   return (
-    <section className="diagrams-activity" aria-labelledby="diagrams-activity-title">
-      <div>
-        <h3 id="diagrams-activity-title">Workflow diagrams</h3>
-        <p>Select a workflow to request Generator-owned Mermaid and render it as SVG.</p>
-      </div>
-      <ul className="compact-entity-list diagram-workflow-list" aria-label="Workflow diagram candidates">
-        {workflows.map((workflow) => {
-          const isSelected =
-            selectedEntity?.scope === workflow.scope && selectedEntity.identity === workflow.identity;
-
-          return (
-            <li key={`${workflow.scope}:${workflow.identity}`}>
-              <CompactEntityRowButton
-                entity={workflow}
-                isSelected={isSelected}
-                className="diagram-workflow-button"
-                selectedClassName="diagram-workflow-button--selected"
-                onSelect={onSelectWorkflow}
-              />
-            </li>
-          );
-        })}
-      </ul>
-    </section>
+    <PlaceholderPanel
+      title="Open diagrams"
+      message={`${workflowCount} workflow diagram candidate${workflowCount === 1 ? '' : 's'} available. Select a workflow in the entity list, then use the Diagram tab or Inspector action.`}
+    />
   );
 }
 
@@ -1666,6 +1538,11 @@ function InspectorPanel({
   selectedSearchResult,
   sourceView,
   validation,
+  onOpenDiagrams,
+  onExploreWorkflows,
+  onViewDiagnostics,
+  onRefreshWorkspace,
+  onShowMap,
 }: {
   readonly diagramView: SelectedEntityDiagramViewModel | undefined;
   readonly entity: PathDerivedModelEntity | undefined;
@@ -1675,26 +1552,50 @@ function InspectorPanel({
   readonly selectedSearchResult: SearchResult | undefined;
   readonly sourceView: SourceFileViewModel | undefined;
   readonly validation: ValidationResultViewModel | undefined;
+  readonly onOpenDiagrams: () => void;
+  readonly onExploreWorkflows: () => void;
+  readonly onViewDiagnostics: () => void;
+  readonly onRefreshWorkspace: () => void;
+  readonly onShowMap: () => void;
 }) {
   return (
     <aside className="inspector-panel" aria-label="Inspector panel">
       <div className="panel-heading">
-        <p className="eyebrow">Inspector</p>
-        <h2>Inspector</h2>
+        <h2>Inspector & Actions</h2>
       </div>
+      <section className="inspector-section-label"><h3>Inspector</h3></section>
       <SelectedEntitySummary
         entity={entity}
         diagnosticCount={selectedDiagnostics.length}
         entitySummary={findEntitySummary(validation?.entitySummaries, entity)}
       />
+      <InspectorActions onOpenDiagrams={onOpenDiagrams} onExploreWorkflows={onExploreWorkflows} onViewDiagnostics={onViewDiagnostics} onRefreshWorkspace={onRefreshWorkspace} onShowMap={onShowMap} />
+      <InspectorDiagnostics diagnostics={selectedDiagnostics} validation={validation} />
       <InspectorDiagramContext diagramView={diagramView} />
       <SourceMetadata sourceView={sourceView} />
       <SelectedDiagnosticContext selection={selectedDiagnostic} relationships={relationships} />
       <SelectedSearchMatchContext result={selectedSearchResult} />
       <InspectorRelationships relationships={relationships} />
-      <InspectorDiagnostics diagnostics={selectedDiagnostics} validation={validation} />
     </aside>
   );
+}
+
+
+function InspectorActions({ onOpenDiagrams, onExploreWorkflows, onViewDiagnostics, onRefreshWorkspace, onShowMap }: { readonly onOpenDiagrams: () => void; readonly onExploreWorkflows: () => void; readonly onViewDiagnostics: () => void; readonly onRefreshWorkspace: () => void; readonly onShowMap: () => void; }) {
+  return (
+    <section className="inspector-actions" aria-label="Actions">
+      <h3>Actions</h3>
+      <button type="button" onClick={onOpenDiagrams}>Open diagrams</button>
+      <button type="button" onClick={onExploreWorkflows}>Explore workflows</button>
+      <button type="button" onClick={onShowMap}>Show map</button>
+      <button type="button" onClick={onViewDiagnostics}>View diagnostics</button>
+      <button type="button" onClick={onRefreshWorkspace}>Refresh workspace</button>
+    </section>
+  );
+}
+
+function getCategoryScope(category: ModelElementCategory): ModelEntityScope | undefined {
+  return modelElementCategories.find((item) => item.id === category)?.scope;
 }
 
 function DiagnosticsPanel({
@@ -1786,7 +1687,6 @@ function ClassicLayout({
   validation,
   workspaceOverview,
   onArchiveSelected,
-  onExampleSelected,
   onDiagnosticSelected,
   onEntitySelected,
   onSearchQueryChanged,
@@ -1806,7 +1706,6 @@ function ClassicLayout({
   readonly workspaceFiles: readonly WorkspaceFileEntry[];
   readonly workspaceOverview: WorkspaceOverviewViewModel | undefined;
   readonly onArchiveSelected: (file: File | undefined) => void;
-  readonly onExampleSelected: (exampleId: CanonicalExampleId) => void;
   readonly onDiagnosticSelected: (diagnostic: DiagnosticViewModel) => void;
   readonly onEntitySelected: (selection: PathDerivedEntitySelection) => void;
   readonly onSearchQueryChanged: (query: string) => void;
@@ -1844,7 +1743,6 @@ function ClassicLayout({
               onChange={(event) => void onArchiveSelected(event.currentTarget.files?.[0])}
             />
           </label>
-          <ExampleLoader disabled={status.kind === 'loading'} onExampleSelected={onExampleSelected} />
         </div>
       </section>
 
@@ -1991,20 +1889,17 @@ function EntityScopeList({
   readonly selectedEntity: PathDerivedEntitySelection;
   readonly onSelectEntity: (selection: PathDerivedEntitySelection) => void;
 }) {
+  const [entityFilter, setEntityFilter] = useState('');
   const scopeGroups =
     category && category !== 'overview'
-      ? index.scopes.filter((scopeGroup) => scopeGroup.scope === category)
+      ? index.scopes.filter((scopeGroup) => scopeGroup.scope === getCategoryScope(category))
       : index.scopes;
 
   return (
     <div className="entity-scope-list" aria-label="Path-derived entities grouped by scope">
-      {scopeGroups.map((scopeGroup) => (
+      <label className="entity-list-search"><span className="visually-hidden">Search entities</span><input type="search" value={entityFilter} placeholder={`Search ${formatModelCategoryTitle(category ?? 'overview').toLowerCase()}...`} onChange={(event) => setEntityFilter(event.currentTarget.value)} /></label>
+      {scopeGroups.map((scopeGroup) => ({ ...scopeGroup, entities: scopeGroup.entities.filter((entity) => `${entity.displayName} ${entity.identity}`.toLowerCase().includes(entityFilter.trim().toLowerCase())) })).map((scopeGroup) => (
         <section className="entity-scope-group" key={scopeGroup.scope}>
-          <h3>
-            <span>{scopeGroup.scope}</span>
-            <strong>{scopeGroup.entities.length}</strong>
-          </h3>
-
           {scopeGroup.entities.length > 0 ? (
             <ul className="compact-entity-list">
               {scopeGroup.entities.map((entity) => {
@@ -2027,6 +1922,7 @@ function EntityScopeList({
           ) : (
             <p>No entities in this scope.</p>
           )}
+          <footer className="entity-list-footer">Showing {scopeGroup.entities.length} {formatModelCategoryTitle(category ?? 'overview').toLowerCase()}</footer>
         </section>
       ))}
     </div>
@@ -2319,6 +2215,7 @@ function SourcePanel({
         <span>{sourceView.lineCount} lines</span>
       </div>
 
+      <EntityDashboardCards entity={entity} sourceView={sourceView} diagnostics={diagnostics} />
       <SelectedSearchMatchContext result={selectedSearchResult} />
       <SelectedDiagnosticContext selection={selectedDiagnostic} />
       <SelectedSourceDiagnostics diagnostics={diagnostics} />
@@ -2330,6 +2227,42 @@ function SourcePanel({
         <span>{sourceView.characterCount} characters</span>
       </footer>
     </section>
+  );
+}
+
+function EntityDashboardCards({
+  diagnostics,
+  entity,
+  sourceView,
+}: {
+  readonly diagnostics: readonly DiagnosticViewModel[];
+  readonly entity: PathDerivedModelEntity;
+  readonly sourceView: SourceFileViewModel;
+}) {
+  return (
+    <div className="entity-dashboard-card-grid" aria-label="Selected entity dashboard cards">
+      <article className="entity-dashboard-card">
+        <h3>Summary</h3>
+        <p>{entity.scope === 'workflows' ? 'Workflow source and validation context.' : 'Path-derived entity source context.'}</p>
+      </article>
+      <article className="entity-dashboard-card">
+        <h3>Validation status</h3>
+        <strong>{diagnostics.length > 0 ? 'Has diagnostics' : 'No diagnostics'}</strong>
+        <p>{diagnostics.length} diagnostics for this file.</p>
+      </article>
+      <article className="entity-dashboard-card">
+        <h3>Model files</h3>
+        <strong>1</strong>
+        <p>{sourceView.extension.toUpperCase()} source artifact.</p>
+      </article>
+      <article className="entity-dashboard-card entity-dashboard-card--wide">
+        <h3>About this {entity.scope === 'workflows' ? 'workflow' : 'entity'}</h3>
+        <dl>
+          <div><dt>ID</dt><dd><code>{entity.identity}</code></dd></div>
+          <div><dt>Source</dt><dd><code>{entity.filePath}</code></dd></div>
+        </dl>
+      </article>
+    </div>
   );
 }
 
@@ -2669,6 +2602,11 @@ function InspectorDiagnostics({
   return (
     <section className="inspector-diagnostics" aria-label="Inspector diagnostics summary">
       <h3>Diagnostics</h3>
+      <dl className="entity-summary-list">
+        <div><dt>Errors</dt><dd>{diagnostics.filter((item) => item.severity.toLowerCase() === 'error').length}</dd></div>
+        <div><dt>Warnings</dt><dd>{diagnostics.filter((item) => ['warning', 'warn'].includes(item.severity.toLowerCase())).length}</dd></div>
+        <div><dt>Info / Other</dt><dd>{diagnostics.filter((item) => !['error', 'warning', 'warn'].includes(item.severity.toLowerCase())).length}</dd></div>
+      </dl>
       <p>{validation ? `${diagnostics.length} diagnostics for selected file.` : 'Validation not available.'}</p>
     </section>
   );
@@ -2859,7 +2797,15 @@ function getModelCategoryCount(
 }
 
 function formatActivityTitle(activity: ActivityMode): string {
-  return activityItems.find((item) => item.id === activity)?.label ?? 'Explorer';
+  switch (activity) {
+    case 'search': return 'Search';
+    case 'validation': return 'Validation';
+    case 'diagrams': return 'Diagrams';
+    case 'relationships': return 'Relationships';
+    case 'map': return 'Map';
+    case 'explorer':
+    default: return 'Explorer';
+  }
 }
 
 function formatModelCategoryTitle(category: ModelElementCategory): string {

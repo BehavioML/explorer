@@ -58,17 +58,19 @@ test('contains source layout safeguards for long paths and large files', () => {
 });
 
 
-test('diagrams and explorer share the compact entity workflow row pattern', () => {
+test('workflow browsing is consolidated into the entity list and actions move to the inspector', () => {
   assert.match(appSource, /function DiagramsActivityPanel/);
   assert.match(appSource, /function CompactEntityRowButton/);
-  assert.match(appSource, /const workflows = index\.entities\.filter\(\(entity\) => entity\.scope === 'workflows'\)/);
-  assert.match(appSource, /className="compact-entity-list diagram-workflow-list"/);
+  assert.match(appSource, /function InspectorActions/);
+  assert.match(appSource, /Open diagrams/);
+  assert.match(appSource, /Explore workflows/);
+  assert.match(appSource, /Show map/);
+  assert.match(appSource, /View diagnostics/);
+  assert.match(appSource, /Refresh workspace/);
   assert.match(appSource, /className="compact-entity-list"/);
-  assert.match(appSource, /className="diagram-workflow-button"/);
   assert.match(appSource, /className="entity-button"/);
-  assert.match(stylesSource, /\.compact-entity-button\s*\{[^}]*border-bottom:\s*1px solid var\(--color-border\);[^}]*border-radius:\s*0;[^}]*background:\s*transparent;[^}]*}/s);
-  assert.doesNotMatch(
-    appSource,
-    /title="Diagrams"\s+message="Open a workflow entity tab and select Diagram to lazily request/s,
-  );
+  assert.doesNotMatch(appSource, /className="compact-entity-list diagram-workflow-list"/);
+  assert.doesNotMatch(appSource, /className="diagram-workflow-button"/);
+  assert.doesNotMatch(appSource, /Load example/);
+  assert.doesNotMatch(appSource, /ExampleLoader/);
 });

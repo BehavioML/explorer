@@ -51,14 +51,29 @@ type ForceLink = SimulationLinkDatum<ForceNode> & Omit<BehaviorMapEdge, 'source'
 
 const DEFAULT_WIDTH = 1800;
 const DEFAULT_HEIGHT = 1200;
-const CENTER_X = DEFAULT_WIDTH / 2;
-const CENTER_Y = DEFAULT_HEIGHT / 2;
 const BOUNDS_MARGIN = 180;
 const SIMULATION_TICKS = 360;
 
-export function layoutBehaviorMapGraph(graph: BehaviorMapGraph): BehaviorMapLayout {
+export type BehaviorMapPositionSnapshot = { readonly x: number; readonly y: number; readonly vx?: number; readonly vy?: number };
+
+export interface BehaviorMapLayoutOptions {
+  readonly width?: number;
+  readonly height?: number;
+  readonly previousPositions?: ReadonlyMap<string, BehaviorMapPositionSnapshot>;
+}
+
+export function layoutBehaviorMapGraph(graph: BehaviorMapGraph, options: BehaviorMapLayoutOptions = {}): BehaviorMapLayout {
+  const width = Math.max(1, options.width ?? DEFAULT_WIDTH);
+  const height = Math.max(1, options.height ?? DEFAULT_HEIGHT);
+  const centerX = width / 2;
+  const centerY = height / 2;
   const childIds = new Set(graph.edges.map((edge) => edge.source));
-  const nodes: ForceNode[] = graph.nodes.map((node, index) => seedNode(node, childIds.has(node.id), index, graph.nodes.length));
+  const parentByNodeId = new Map(graph.edges.map((edge) => [edge.target, edge.source]));
+  const siblingIndexByNodeId = new Map<string, { index: number; count: number }>();
+  const childrenByParent = new Map<string, string[]>();
+  for (const edge of graph.edges) childrenByParent.set(edge.source, [...(childrenByParent.get(edge.source) ?? []), edge.target]);
+  for (const children of childrenByParent.values()) children.forEach((id, index) => siblingIndexByNodeId.set(id, { index, count: children.length }));
+  const nodes: ForceNode[] = graph.nodes.map((node, index) => seedNode(node, childIds.has(node.id), index, graph.nodes.length, { centerX, centerY, previousPositions: options.previousPositions, parentByNodeId, siblingIndexByNodeId }));
   const nodesById = new Map(nodes.map((node) => [node.id, node]));
   const links: ForceLink[] = graph.edges.flatMap((edge) => {
     const source = nodesById.get(edge.source);
@@ -68,10 +83,10 @@ export function layoutBehaviorMapGraph(graph: BehaviorMapGraph): BehaviorMapLayo
 
   const simulation = forceSimulation<ForceNode>(nodes)
     .force('link', forceLink<ForceNode, ForceLink>(links).id((node) => node.id).distance((link) => linkDistanceByKinds(linkSourceKind(link), linkTargetKind(link))).strength(0.45))
-    .force('charge', forceManyBody<ForceNode>().strength((node) => node.kind === 'manifest' ? -900 : -520))
-    .force('center', forceCenter(CENTER_X, CENTER_Y).strength(0.08))
-    .force('collision', forceCollide<ForceNode>().radius((node) => nodeRadius(node) + 22).strength(0.95).iterations(3))
-    .force('radial', forceRadial<ForceNode>((node) => radialDistanceByKind(node.kind), CENTER_X, CENTER_Y).strength((node) => node.kind === 'manifest' ? 1 : 0.42))
+    .force('charge', forceManyBody<ForceNode>().strength((node) => node.kind === 'manifest' ? -1000 : -700))
+    .force('center', forceCenter(centerX, centerY).strength(0.08))
+    .force('collision', forceCollide<ForceNode>().radius((node) => nodeRadius(node) + 36).strength(1).iterations(3))
+    .force('radial', forceRadial<ForceNode>((node) => radialDistanceByKind(node.kind), centerX, centerY).strength((node) => node.kind === 'manifest' ? 1 : 0.42))
     .stop();
 
   for (let tick = 0; tick < SIMULATION_TICKS; tick += 1) simulation.tick();
@@ -88,8 +103,8 @@ export function layoutBehaviorMapGraph(graph: BehaviorMapGraph): BehaviorMapLayo
   return {
     nodes: positioned.sort((a, b) => a.id.localeCompare(b.id)),
     edges: edges.sort((a, b) => a.id.localeCompare(b.id)),
-    width: Math.ceil(Math.max(DEFAULT_WIDTH, bounds.maxX - Math.min(0, bounds.minX))),
-    height: Math.ceil(Math.max(DEFAULT_HEIGHT, bounds.maxY - Math.min(0, bounds.minY))),
+    width,
+    height,
     bounds,
   };
 }
@@ -97,15 +112,15 @@ export function layoutBehaviorMapGraph(graph: BehaviorMapGraph): BehaviorMapLayo
 export function radialDistanceByKind(kind: BehaviorMapNodeKind): number {
   switch (kind) {
     case 'manifest': return 0;
-    case 'semantic-area': return 250;
-    case 'aggregated-workflow': return 470;
-    case 'workflow': return 610;
+    case 'semantic-area': return 320;
+    case 'aggregated-workflow': return 560;
+    case 'workflow': return 760;
     case 'capability':
     case 'event':
     case 'entity':
     case 'state-machine':
-    case 'decision': return 790;
-    default: return 720;
+    case 'decision': return 980;
+    default: return 900;
   }
 }
 
@@ -120,27 +135,31 @@ export function nodeRadius(node: Pick<BehaviorMapNode, 'kind' | 'workflowSubtype
 }
 
 export function linkDistanceByKinds(sourceKind: BehaviorMapNodeKind, targetKind: BehaviorMapNodeKind): number {
-  if (sourceKind === 'manifest' && targetKind === 'semantic-area') return 250;
-  if (sourceKind === 'semantic-area' && targetKind === 'aggregated-workflow') return 260;
-  if (sourceKind === 'semantic-area' && targetKind === 'workflow') return 330;
-  if (sourceKind === 'aggregated-workflow' && targetKind === 'workflow') return 220;
-  if (targetKind === 'capability' || targetKind === 'event' || targetKind === 'entity' || targetKind === 'state-machine' || targetKind === 'decision') return 260;
-  return 300;
+  if (sourceKind === 'manifest' || targetKind === 'manifest') return 260;
+  if (sourceKind === 'semantic-area' || targetKind === 'semantic-area') return 260;
+  if (sourceKind === 'aggregated-workflow' || targetKind === 'aggregated-workflow') return 220;
+  return 180;
 }
 
-function seedNode(node: BehaviorMapNode, expanded: boolean, index: number, total: number): ForceNode {
+function seedNode(node: BehaviorMapNode, expanded: boolean, index: number, total: number, options: { readonly centerX: number; readonly centerY: number; readonly previousPositions?: ReadonlyMap<string, BehaviorMapPositionSnapshot>; readonly parentByNodeId: ReadonlyMap<string, string>; readonly siblingIndexByNodeId: ReadonlyMap<string, { index: number; count: number }> }): ForceNode {
   const radius = nodeRadius(node);
   const shape = node.kind === 'manifest' || node.kind === 'semantic-area' || node.kind === 'aggregated-workflow' ? 'circle' : 'pill';
   const displayLines = labelLines(node);
   const width = shape === 'pill' ? (node.kind === 'capability' ? 190 : 220) : radius * 2;
   const height = shape === 'pill' ? (displayLines.length > 1 || node.workflowSubtype === 'aggregated' ? 52 : 44) : radius * 2;
-  const angle = (index / Math.max(1, total)) * Math.PI * 2;
+  const previous = options.previousPositions?.get(node.id);
+  const parent = options.previousPositions?.get(options.parentByNodeId.get(node.id) ?? '');
+  const sibling = options.siblingIndexByNodeId.get(node.id) ?? { index, count: total };
+  const angle = (sibling.index / Math.max(1, sibling.count)) * Math.PI * 2;
   const distance = radialDistanceByKind(node.kind);
-  return { ...node, radius, width, height, shape, expanded, displayLines, x: CENTER_X + Math.cos(angle) * distance, y: CENTER_Y + Math.sin(angle) * distance, fx: node.kind === 'manifest' ? CENTER_X : undefined, fy: node.kind === 'manifest' ? CENTER_Y : undefined };
+  const initialChildDistance = parent ? nodeRadius({ kind: node.kind, workflowSubtype: node.workflowSubtype }) + 120 : distance;
+  const x = previous?.x ?? (parent ? parent.x + Math.cos(angle) * initialChildDistance : options.centerX + Math.cos(angle) * distance);
+  const y = previous?.y ?? (parent ? parent.y + Math.sin(angle) * initialChildDistance : options.centerY + Math.sin(angle) * distance);
+  return { ...node, radius, width, height, shape, expanded, displayLines, x, y, vx: previous?.vx, vy: previous?.vy, fx: node.kind === 'manifest' ? options.centerX : undefined, fy: node.kind === 'manifest' ? options.centerY : undefined };
 }
 
 function toLayoutNode(node: ForceNode): BehaviorMapLayoutNode {
-  return { ...node, x: Math.round(node.x ?? CENTER_X), y: Math.round(node.y ?? CENTER_Y) };
+  return { ...node, x: Math.round(node.x ?? 0), y: Math.round(node.y ?? 0) };
 }
 
 function labelLines(node: BehaviorMapNode): readonly string[] {

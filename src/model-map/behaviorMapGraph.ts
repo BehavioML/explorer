@@ -239,43 +239,40 @@ function addEdgeByNodeIds(edges: Map<string, BehaviorMapEdge>, source: string, t
 }
 
 function duplicateSharedVisualNodes(graph: BehaviorMapGraph): BehaviorMapGraph {
-  const incomingByTarget = new Map<string, BehaviorMapEdge[]>();
-  for (const edge of graph.edges) incomingByTarget.set(edge.target, [...(incomingByTarget.get(edge.target) ?? []), edge]);
-
-  const duplicateParentsByCanonicalId = new Map<string, string[]>();
-  for (const node of graph.nodes) {
-    if (!isDuplicableVisualKind(node.kind)) continue;
-    const visualParentIds = uniqueSorted((incomingByTarget.get(node.id) ?? []).map((edge) => edge.source));
-    if (visualParentIds.length > 1) duplicateParentsByCanonicalId.set(node.id, visualParentIds);
-  }
-
-  if (duplicateParentsByCanonicalId.size === 0) {
-    return { nodes: [...graph.nodes].sort(compareNodes), edges: [...graph.edges].sort(compareEdges) };
-  }
-
-  const visualNodeId = (canonicalId: string, visualParentId: string) => `${canonicalId}@@parent:${visualParentId}`;
+  const canonicalNodesById = new Map(graph.nodes.map((node) => [node.id, node]));
+  const visualNodesByCanonicalId = new Map<string, Set<string>>();
   const nodes = new Map<string, BehaviorMapNode>();
+
+  const addVisualNode = (canonicalNode: BehaviorMapNode, visualParentId?: string): BehaviorMapNode => {
+    const id = makeVisualNodeId(canonicalNode.kind, canonicalNode.id, visualParentId);
+    const node: BehaviorMapNode = id === canonicalNode.id
+      ? canonicalNode
+      : { ...canonicalNode, id, canonicalId: canonicalNode.id, visualParentId };
+    nodes.set(id, node);
+    if (!visualNodesByCanonicalId.has(canonicalNode.id)) visualNodesByCanonicalId.set(canonicalNode.id, new Set());
+    visualNodesByCanonicalId.get(canonicalNode.id)?.add(id);
+    return node;
+  };
+
   for (const node of graph.nodes) {
-    const duplicateParents = duplicateParentsByCanonicalId.get(node.id);
-    if (!duplicateParents) {
-      nodes.set(node.id, node);
-      continue;
-    }
-    for (const visualParentId of duplicateParents) {
-      const id = visualNodeId(node.id, visualParentId);
-      nodes.set(id, { ...node, id, canonicalId: node.id, visualParentId });
-    }
+    const hasIncoming = graph.edges.some((edge) => edge.target === node.id);
+    if (!hasIncoming || !isDuplicableVisualKind(node.kind)) addVisualNode(node);
   }
 
   const edges = new Map<string, BehaviorMapEdge>();
-  for (const edge of graph.edges) {
-    const sourceDuplicates = duplicateParentsByCanonicalId.get(edge.source);
-    const targetDuplicates = duplicateParentsByCanonicalId.get(edge.target);
-    const sourceIds = sourceDuplicates ? sourceDuplicates.map((parentId) => visualNodeId(edge.source, parentId)) : [edge.source];
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const edge of graph.edges) {
+      const sourceVisualIds = visualNodesByCanonicalId.get(edge.source);
+      const canonicalTarget = canonicalNodesById.get(edge.target);
+      if (!sourceVisualIds || !canonicalTarget) continue;
 
-    for (const source of sourceIds) {
-      for (const target of targetDuplicates ? targetIdsForSource(edge.target, targetDuplicates, edge.source, source, visualNodeId) : [edge.target]) {
-        addEdgeByNodeIds(edges, source, target, edge.kind, edge.sourceField);
+      for (const sourceVisualId of sourceVisualIds) {
+        const targetVisualNode = addVisualNode(canonicalTarget, isDuplicableVisualKind(canonicalTarget.kind) ? sourceVisualId : undefined);
+        const before = edges.size;
+        addEdgeByNodeIds(edges, sourceVisualId, targetVisualNode.id, edge.kind, edge.sourceField);
+        if (edges.size !== before) changed = true;
       }
     }
   }
@@ -283,16 +280,15 @@ function duplicateSharedVisualNodes(graph: BehaviorMapGraph): BehaviorMapGraph {
   return { nodes: [...nodes.values()].sort(compareNodes), edges: [...edges.values()].sort(compareEdges) };
 }
 
+function makeVisualNodeId(kind: BehaviorMapNodeKind, canonicalId: string, visualParentId?: string): string {
+  // Workflows and capabilities are visual containment nodes in the Behavior Map.
+  // Parent-scoped ids keep duplicate visual instances local without changing the canonical model entity.
+  if ((kind === 'workflow' || kind === 'aggregated-workflow' || kind === 'capability') && visualParentId) return `${canonicalId}@@parent:${visualParentId}`;
+  return canonicalId;
+}
 
 function isDuplicableVisualKind(kind: BehaviorMapNodeKind): boolean {
   return kind === 'workflow' || kind === 'aggregated-workflow' || kind === 'capability';
-}
-
-function targetIdsForSource(canonicalTargetId: string, targetParents: readonly string[], canonicalSourceId: string, visualSourceId: string, visualNodeId: (canonicalId: string, visualParentId: string) => string): readonly string[] {
-  if (targetParents.includes(canonicalSourceId)) return [visualNodeId(canonicalTargetId, canonicalSourceId)];
-  const parsedParent = visualSourceId.includes('@@parent:') ? visualSourceId.slice(visualSourceId.indexOf('@@parent:') + '@@parent:'.length) : undefined;
-  if (parsedParent && targetParents.includes(parsedParent)) return [visualNodeId(canonicalTargetId, parsedParent)];
-  return [visualNodeId(canonicalTargetId, targetParents[0])];
 }
 
 function nodeKindForScope(scope: string): BehaviorMapNodeKind | undefined {

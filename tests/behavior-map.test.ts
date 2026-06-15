@@ -73,3 +73,15 @@ function assertAllNodesMapToArtifacts(refs: readonly string[]) {
   const artifactRefs = new Set(entityIndex.entities.map((entity) => `${entity.scope}/${entity.identity}`));
   for (const nodeRef of refs) assert.equal(artifactRefs.has(nodeRef), true, nodeRef);
 }
+
+test('expanded workflow and capability artifacts use horizontal pill layout metadata', () => {
+  const expandedNodeIds = new Set([areaId, aggregateId, childWorkflowId]);
+  const layout = layoutBehaviorMapGraph(createBehaviorMapGraph({ entityIndex, referenceIndex, expansion: { expandedNodeIds } }));
+  const aggregate = layout.nodes.find((node) => node.id === aggregateId);
+  const capability = layout.nodes.find((node) => node.ref === 'capabilities/payment/charge');
+  assert.equal(aggregate?.shape, 'pill');
+  assert.equal(aggregate?.workflowSubtype, 'aggregated');
+  assert.equal(capability?.shape, 'pill');
+  assert.ok((aggregate?.width ?? 0) > (aggregate?.height ?? 0));
+  assert.ok((capability?.width ?? 0) > (capability?.height ?? 0));
+});

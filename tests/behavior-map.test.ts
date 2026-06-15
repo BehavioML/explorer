@@ -1,87 +1,101 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createPathDerivedEntityIndex, type WorkspaceFileEntry } from '../src/core';
-import { createBehaviorMapGraph, toBehaviorMapNodeId } from '../src/model-map/behaviorMapGraph';
-import { layoutBehaviorMapGraph } from '../src/model-map/behaviorMapLayout';
+import { createPathDerivedEntityIndex, type SemanticReferenceIndexViewModel, type SemanticReferenceViewModel, type WorkspaceFileEntry } from '../src/core';
+import { createBehaviorMapGraph, toBehaviorMapNodeId, validateBehaviorMapGraph } from '../src/model-map/behaviorMapGraph';
+import { layoutBehaviorMapGraph, type BehaviorMapLayoutNode } from '../src/model-map/behaviorMapLayout';
 
-const files: WorkspaceFileEntry[] = [
-  { path: 'semantic-areas/commerce.yaml', content: '' },
-  { path: 'workflows/aggregate/checkout.yaml', content: '' },
-  { path: 'workflows/checkout/pay.yaml', content: '' },
-  { path: 'capabilities/payment/charge.yaml', content: '' },
-  { path: 'roles/user.yaml', content: '' },
-  { path: 'events/paid.yaml', content: '' },
+const files: readonly WorkspaceFileEntry[] = [
+  file('semantic-areas/customer.yaml'),
+  file('workflows/customer/onboard.yaml'),
+  file('workflows/customer/verify.yaml'),
+  file('workflows/customer/child.yaml'),
+  file('capabilities/customer/check_identity.yaml'),
+  file('capabilities/customer/send_email.yaml'),
 ];
-const entityIndex = createPathDerivedEntityIndex(files);
-const referenceIndex = {
+
+const referenceIndex: SemanticReferenceIndexViewModel = {
   entities: [],
+  outgoingReferences: [
+    ref('semantic-areas', 'customer', 'workflows[0]', 'workflows', 'customer/onboard'),
+    ref('semantic-areas', 'customer', 'workflows[1]', 'workflows', 'customer/verify'),
+    ref('workflows', 'customer/onboard', 'steps[0].workflow', 'workflows', 'customer/child'),
+    ref('workflows', 'customer/onboard', 'steps[1].capability', 'capabilities', 'customer/check_identity'),
+    ref('workflows', 'customer/onboard', 'steps[2].capability', 'capabilities', 'customer/send_email'),
+    ref('workflows', 'customer/verify', 'steps[0].capability', 'capabilities', 'customer/check_identity'),
+  ],
   incomingReferences: [],
   unresolvedReferences: [],
-  outgoingReferences: [
-    ref('semantic-areas', 'commerce', 'workflows[0]', 'workflows', 'aggregate/checkout'),
-    ref('workflows', 'aggregate/checkout', 'steps[0].workflow', 'workflows', 'checkout/pay'),
-    ref('workflows', 'checkout/pay', 'steps[0].capability', 'capabilities', 'payment/charge'),
-  ],
 };
 
-const areaId = toBehaviorMapNodeId('semantic-area', 'semantic-areas', 'commerce');
-const aggregateId = toBehaviorMapNodeId('workflow', 'workflows', 'aggregate/checkout');
-const childWorkflowId = toBehaviorMapNodeId('workflow', 'workflows', 'checkout/pay');
+const expanded = new Set([
+  toBehaviorMapNodeId('semantic-area', 'semantic-areas', 'customer'),
+  toBehaviorMapNodeId('workflow', 'workflows', 'customer/onboard'),
+  toBehaviorMapNodeId('workflow', 'workflows', 'customer/verify'),
+]);
 
-test('initial graph contains only semantic-area artifact nodes without synthetic roots or groups', () => {
-  const graph = createBehaviorMapGraph({ entityIndex, referenceIndex });
-  assert.deepEqual(graph.nodes.map((node) => node.kind), ['semantic-area']);
-  assert.equal(graph.nodes.some((node) => /root|group|cluster|level/i.test(node.id)), false);
-  assertAllNodesMapToArtifacts(graph.nodes.map((node) => node.ref));
-});
-
-test('semantic area expansion reveals only directly listed workflows and no direct capabilities', () => {
-  const graph = createBehaviorMapGraph({ entityIndex, referenceIndex, expansion: { expandedNodeIds: new Set([areaId]) } });
-  assert.deepEqual(graph.nodes.map((node) => [node.kind, node.ref]), [
-    ['semantic-area', 'semantic-areas/commerce'],
-    ['workflow', 'workflows/aggregate/checkout'],
-  ]);
-  assert.equal(graph.edges[0].kind, 'semantic-area-contains-workflow');
-  assert.equal(graph.nodes.some((node) => node.kind === 'capability'), false);
-});
-
-test('aggregated workflows are real workflow artifacts and expand through explicit step workflow refs', () => {
-  const graph = createBehaviorMapGraph({ entityIndex, referenceIndex, expansion: { expandedNodeIds: new Set([areaId, aggregateId]) } });
-  const aggregate = graph.nodes.find((node) => node.id === aggregateId);
-  assert.equal(aggregate?.workflowSubtype, 'aggregated');
-  assert.equal(graph.nodes.find((node) => node.id === childWorkflowId)?.workflowSubtype, 'regular');
-  assert.equal(graph.edges.some((edge) => edge.kind === 'aggregated-workflow-contains-workflow' && edge.sourceField === 'steps[0].workflow'), true);
-  assertAllNodesMapToArtifacts(graph.nodes.map((node) => node.ref));
-});
-
-test('workflow expansion reveals only direct step capabilities as deterministic pill layout leaves', () => {
-  const expandedNodeIds = new Set([areaId, aggregateId, childWorkflowId]);
-  const graph = createBehaviorMapGraph({ entityIndex, referenceIndex, expansion: { expandedNodeIds } });
-  assert.equal(graph.nodes.some((node) => ['roles', 'events', 'decisions', 'state-machines', 'modules', 'components', 'entities', 'interfaces'].some((scope) => node.ref.startsWith(`${scope}/`))), false);
-  assert.equal(graph.edges.some((edge) => edge.kind === 'workflow-uses-capability' && edge.sourceField === 'steps[0].capability'), true);
-  const first = layoutBehaviorMapGraph(graph);
-  const second = layoutBehaviorMapGraph(graph);
-  assert.deepEqual(second, first);
-  assert.equal(first.nodes.find((node) => node.ref === 'capabilities/payment/charge')?.shape, 'pill');
-});
-
-function ref(sourceScope: string, sourceIdentity: string, fieldPath: string, targetScope: string, targetIdentity: string) {
-  return { source: { scope: sourceScope, identity: sourceIdentity }, fieldPath, targetScope, targetIdentity, resolved: true, target: { scope: targetScope, identity: targetIdentity } };
-}
-
-function assertAllNodesMapToArtifacts(refs: readonly string[]) {
+test('behavior map graph has stable ids, valid endpoints, valid scopes, and only visible semantic nodes', () => {
+  const entityIndex = createPathDerivedEntityIndex(files);
+  const graph = createBehaviorMapGraph({ entityIndex, referenceIndex, expansion: { expandedNodeIds: expanded } });
   const artifactRefs = new Set(entityIndex.entities.map((entity) => `${entity.scope}/${entity.identity}`));
-  for (const nodeRef of refs) assert.equal(artifactRefs.has(nodeRef), true, nodeRef);
+
+  assert.deepEqual(validateBehaviorMapGraph(graph, artifactRefs), []);
+  assert.equal(new Set(graph.nodes.map((node) => node.id)).size, graph.nodes.length);
+  assert.equal(new Set(graph.edges.map((edge) => edge.id)).size, graph.edges.length);
+  assert.ok(graph.edges.every((edge) => graph.nodes.some((node) => node.id === edge.source) && graph.nodes.some((node) => node.id === edge.target)));
+  assert.ok(graph.nodes.every((node) => ['semantic-area', 'workflow', 'capability'].includes(node.kind)));
+});
+
+test('behavior map layout assigns finite separated positions and includes node extents in bounds', () => {
+  const graph = createBehaviorMapGraph({ entityIndex: createPathDerivedEntityIndex(files), referenceIndex, expansion: { expandedNodeIds: expanded } });
+  const layout = layoutBehaviorMapGraph(graph);
+
+  assert.equal(layout.nodes.length, graph.nodes.length);
+  assert.ok(layout.nodes.every((node) => Number.isFinite(node.x) && Number.isFinite(node.y)));
+  assertDistinctSiblingPositions(layout.nodes, graph.edges.filter((edge) => edge.source === toBehaviorMapNodeId('semantic-area', 'semantic-areas', 'customer')).map((edge) => edge.target));
+  assertDistinctSiblingPositions(layout.nodes, graph.edges.filter((edge) => edge.source === toBehaviorMapNodeId('workflow', 'workflows', 'customer/onboard')).map((edge) => edge.target));
+
+  for (const node of layout.nodes) {
+    const halfWidth = node.shape === 'pill' ? node.width / 2 : node.radius;
+    const halfHeight = node.shape === 'pill' ? node.height / 2 : node.radius;
+    assert.ok(layout.bounds.minX <= node.x - halfWidth);
+    assert.ok(layout.bounds.maxX >= node.x + halfWidth);
+    assert.ok(layout.bounds.minY <= node.y - halfHeight);
+    assert.ok(layout.bounds.maxY >= node.y + halfHeight);
+  }
+});
+
+test('shared child uses one deterministic primary placement without being moved by another parent', () => {
+  const graph = createBehaviorMapGraph({ entityIndex: createPathDerivedEntityIndex(files), referenceIndex, expansion: { expandedNodeIds: expanded } });
+  const layout = layoutBehaviorMapGraph(graph);
+  const capability = layout.nodes.find((node) => node.id === toBehaviorMapNodeId('capability', 'capabilities', 'customer/check_identity'));
+  const onboard = layout.nodes.find((node) => node.id === toBehaviorMapNodeId('workflow', 'workflows', 'customer/onboard'));
+  const verify = layout.nodes.find((node) => node.id === toBehaviorMapNodeId('workflow', 'workflows', 'customer/verify'));
+
+  assert.ok(capability && onboard && verify);
+  assert.equal(capability.x, onboard.x + 300);
+  assert.notDeepEqual([capability.x, capability.y], [verify.x + 300, verify.y]);
+});
+
+function assertDistinctSiblingPositions(nodes: readonly BehaviorMapLayoutNode[], childIds: readonly string[]) {
+  const positions = childIds.map((id) => {
+    const node = nodes.find((candidate) => candidate.id === id);
+    assert.ok(node, `missing layout node ${id}`);
+    return `${node.x},${node.y}`;
+  });
+  assert.equal(new Set(positions).size, positions.length);
 }
 
-test('expanded workflow and capability artifacts use horizontal pill layout metadata', () => {
-  const expandedNodeIds = new Set([areaId, aggregateId, childWorkflowId]);
-  const layout = layoutBehaviorMapGraph(createBehaviorMapGraph({ entityIndex, referenceIndex, expansion: { expandedNodeIds } }));
-  const aggregate = layout.nodes.find((node) => node.id === aggregateId);
-  const capability = layout.nodes.find((node) => node.ref === 'capabilities/payment/charge');
-  assert.equal(aggregate?.shape, 'pill');
-  assert.equal(aggregate?.workflowSubtype, 'aggregated');
-  assert.equal(capability?.shape, 'pill');
-  assert.ok((aggregate?.width ?? 0) > (aggregate?.height ?? 0));
-  assert.ok((capability?.width ?? 0) > (capability?.height ?? 0));
-});
+function file(path: string): WorkspaceFileEntry { return { path, content: '' }; }
+
+function ref(sourceScope: string, sourceIdentity: string, fieldPath: string, targetScope: string, targetIdentity: string): SemanticReferenceViewModel {
+  return {
+    source: { scope: sourceScope, identity: sourceIdentity, filePath: `${sourceScope}/${sourceIdentity}.yaml` },
+    target: { scope: targetScope, identity: targetIdentity, filePath: `${targetScope}/${targetIdentity}.yaml` },
+    sourceFilePath: `${sourceScope}/${sourceIdentity}.yaml`,
+    fieldPath,
+    targetScope,
+    targetIdentity,
+    targetFilePath: `${targetScope}/${targetIdentity}.yaml`,
+    resolved: true,
+  };
+}

@@ -152,10 +152,10 @@ export function BehaviorMapView({
       for (const [nodeId, state] of revealStatesRef.current) {
         const elapsed = Math.max(0, now - state.startedAt);
         const total = LINK_GROW_MS + NODE_GROW_MS + LABEL_FADE_MS;
-        if (elapsed >= total) {
+        if (elapsed >= total + 32) {
           revealStatesRef.current.delete(nodeId);
         } else {
-          const phase = elapsed < LINK_GROW_MS ? 'link-growing' : elapsed < LINK_GROW_MS + NODE_GROW_MS ? 'node-growing' : 'label-fading';
+          const phase = elapsed >= total ? 'settled' : elapsed < LINK_GROW_MS ? 'link-growing' : elapsed < LINK_GROW_MS + NODE_GROW_MS ? 'node-growing' : 'label-fading';
           revealStatesRef.current.set(nodeId, { ...state, phase });
           hasActive = true;
         }
@@ -229,9 +229,10 @@ export function BehaviorMapView({
   }
 
   function expandOneLevel() {
+    const visibleBefore = activeLayout.nodes.filter((node) => !revealStatesRef.current.has(node.id));
     setExpandedNodeIds((current) => {
       const next = new Set(current);
-      for (const node of activeLayout.nodes) {
+      for (const node of visibleBefore) {
         if (node.kind === 'semantic-area' || node.kind === 'workflow' || node.kind === 'aggregated-workflow') next.add(node.canonicalId);
       }
       return next;
@@ -396,6 +397,7 @@ function nodeTransform(node: BehaviorMapLayoutNode, reveal: RevealState | undefi
 
 function labelRevealStyle(reveal: RevealState | undefined, now: number): { opacity?: number } | undefined {
   if (!reveal) return undefined;
+  if (reveal.phase === 'settled') return { opacity: 1 };
   if (reveal.phase === 'link-growing' || reveal.phase === 'node-growing') return { opacity: 0 };
   return { opacity: revealProgress(reveal, now, LABEL_FADE_MS, LINK_GROW_MS + NODE_GROW_MS) };
 }

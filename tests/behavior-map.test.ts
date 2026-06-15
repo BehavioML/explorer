@@ -81,12 +81,12 @@ test('shared capabilities are visually duplicated per parent while preserving ca
 
   assert.equal(visualCapabilityNodes.length, 2);
   assert.ok(visualCapabilityNodes.every((node) => node.id !== canonicalCapabilityId));
-  assert.deepEqual(visualCapabilityNodes.map((node) => node.visualParentId).sort(), [
-    toBehaviorMapNodeId('aggregated-workflow', 'workflows', 'customer/onboard'),
-    toBehaviorMapNodeId('workflow', 'workflows', 'customer/verify'),
-  ]);
-  assert.ok(graph.edges.some((edge) => edge.kind === 'workflow-uses-capability' && edge.target === `${canonicalCapabilityId}@@parent:${toBehaviorMapNodeId('aggregated-workflow', 'workflows', 'customer/onboard')}`));
-  assert.ok(graph.edges.some((edge) => edge.kind === 'workflow-uses-capability' && edge.target === `${canonicalCapabilityId}@@parent:${toBehaviorMapNodeId('workflow', 'workflows', 'customer/verify')}`));
+  const onboardVisualId = `${toBehaviorMapNodeId('aggregated-workflow', 'workflows', 'customer/onboard')}@@parent:${toBehaviorMapNodeId('semantic-area', 'semantic-areas', 'customer')}`;
+  const verifyVisualId = `${toBehaviorMapNodeId('workflow', 'workflows', 'customer/verify')}@@parent:${toBehaviorMapNodeId('semantic-area', 'semantic-areas', 'customer')}`;
+  assert.deepEqual(visualCapabilityNodes.map((node) => node.visualParentId).sort(), [onboardVisualId, verifyVisualId].sort());
+  assert.ok(graph.edges.some((edge) => edge.kind === 'workflow-uses-capability' && edge.source === onboardVisualId && edge.target === `${canonicalCapabilityId}@@parent:${onboardVisualId}`));
+  assert.ok(graph.edges.some((edge) => edge.kind === 'workflow-uses-capability' && edge.source === verifyVisualId && edge.target === `${canonicalCapabilityId}@@parent:${verifyVisualId}`));
+  assert.ok(visualCapabilityNodes.every((node) => graph.edges.filter((edge) => edge.target === node.id).length === 1));
   assert.deepEqual(validateBehaviorMapGraph(graph), []);
 });
 
@@ -107,11 +107,10 @@ test('shared workflows are visually duplicated per parent while preserving canon
 
   assert.equal(visualVerifyNodes.length, 2);
   assert.ok(visualVerifyNodes.every((node) => node.id !== canonicalVerifyId));
-  assert.deepEqual(visualVerifyNodes.map((node) => node.visualParentId).sort(), [
-    toBehaviorMapNodeId('aggregated-workflow', 'workflows', 'customer/onboard'),
-    toBehaviorMapNodeId('semantic-area', 'semantic-areas', 'customer'),
-  ]);
-  assert.ok(graph.edges.some((edge) => edge.kind === 'aggregated-workflow-contains-workflow' && edge.target === `${canonicalVerifyId}@@parent:${toBehaviorMapNodeId('aggregated-workflow', 'workflows', 'customer/onboard')}`));
+  const semanticAreaId = toBehaviorMapNodeId('semantic-area', 'semantic-areas', 'customer');
+  const onboardVisualId = `${toBehaviorMapNodeId('aggregated-workflow', 'workflows', 'customer/onboard')}@@parent:${semanticAreaId}`;
+  assert.deepEqual(visualVerifyNodes.map((node) => node.visualParentId).sort(), [onboardVisualId, semanticAreaId].sort());
+  assert.ok(graph.edges.some((edge) => edge.kind === 'aggregated-workflow-contains-workflow' && edge.source === onboardVisualId && edge.target === `${canonicalVerifyId}@@parent:${onboardVisualId}`));
   assert.deepEqual(validateBehaviorMapGraph(graph), []);
 });
 

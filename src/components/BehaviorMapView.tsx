@@ -6,10 +6,16 @@ import { edgeEndpoints, layoutBehaviorMapGraph, type BehaviorMapLayout, type Beh
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 3;
 const FIT_TRANSITION_MS = 250;
+const LINK_GROW_MS = 220;
+const NODE_GROW_MS = 180;
+const LABEL_FADE_MS = 140;
+const CHILD_STAGGER_MS = 28;
 
 type ViewportSize = { readonly width: number; readonly height: number };
 type PositionSnapshot = { readonly x: number; readonly y: number; readonly vx?: number; readonly vy?: number };
 type TooltipState = { readonly nodeId: string; readonly x: number; readonly y: number };
+type RevealPhase = 'link-growing' | 'node-growing' | 'label-fading' | 'settled';
+type RevealState = { readonly phase: RevealPhase; readonly startedAt: number; readonly parentVisualId: string };
 
 export function BehaviorMapView({
   entityIndex,
@@ -44,6 +50,10 @@ export function BehaviorMapView({
   const layoutAnimationFrame = useRef<number | undefined>(undefined);
   const viewAnimationTimer = useRef<number | undefined>(undefined);
   const tooltipTimer = useRef<number | undefined>(undefined);
+  const revealAnimationFrame = useRef<number | undefined>(undefined);
+  const previousVisualIdsRef = useRef<ReadonlySet<string>>(new Set());
+  const revealStatesRef = useRef(new Map<string, RevealState>());
+  const [revealClock, setRevealClock] = useState(() => performance.now());
   const [renderedLayout, setRenderedLayout] = useState<BehaviorMapLayout>();
 
   useEffect(() => { zoomRef.current = zoom; }, [zoom]);
@@ -89,19 +99,38 @@ export function BehaviorMapView({
     }
     return { neighborsByNode, childrenByNode, edgeIdsByNode };
   }, [activeLayout.edges]);
+  const revealStates = revealStatesRef.current;
   const selectedVisualNodeIds = useMemo(
     () => new Set(activeLayout.nodes.filter((node) => isSelected(node, selectedEntity)).map((node) => node.id)),
     [activeLayout.nodes, selectedEntity],
   );
 
+  useEffect(() => () => {
+    if (layoutAnimationFrame.current !== undefined) window.cancelAnimationFrame(layoutAnimationFrame.current);
+    if (revealAnimationFrame.current !== undefined) window.cancelAnimationFrame(revealAnimationFrame.current);
+    window.clearTimeout(viewAnimationTimer.current);
+  }, []);
+
   useEffect(() => {
     if (layoutAnimationFrame.current !== undefined) window.cancelAnimationFrame(layoutAnimationFrame.current);
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const previousIds = previousVisualIdsRef.current;
+    const nextIds = new Set(layout.nodes.map((node) => node.id));
+    const now = performance.now();
+    if (!reducedMotion && previousIds.size > 0) {
+      const parentByTarget = new Map(layout.edges.map((edge) => [edge.target, edge.source]));
+      layout.nodes.forEach((node) => {
+        const parentVisualId = parentByTarget.get(node.id);
+        if (!previousIds.has(node.id) && parentVisualId) revealStatesRef.current.set(node.id, { phase: 'link-growing', startedAt: now + revealStatesRef.current.size * CHILD_STAGGER_MS, parentVisualId });
+      });
+    }
+    previousVisualIdsRef.current = nextIds;
     setViewAnimating(true);
     const previous = renderedLayout ?? layout;
-    const startedAt = performance.now();
-    const duration = 280;
-    const tick = (now: number) => {
-      const progress = Math.min(1, (now - startedAt) / duration);
+    const startedAt = now;
+    const duration = reducedMotion ? 1 : 280;
+    const tick = (frameNow: number) => {
+      const progress = Math.min(1, (frameNow - startedAt) / duration);
       const eased = easeOutCubic(progress);
       const next = interpolateLayout(previous, layout, eased);
       setRenderedLayout(next);
@@ -114,9 +143,28 @@ export function BehaviorMapView({
       }
     };
     layoutAnimationFrame.current = window.requestAnimationFrame(tick);
-    return () => {
-      if (layoutAnimationFrame.current !== undefined) window.cancelAnimationFrame(layoutAnimationFrame.current);
+  }, [layout]);
+
+  useEffect(() => {
+    if (revealAnimationFrame.current !== undefined || revealStatesRef.current.size === 0) return;
+    const tick = (now: number) => {
+      let hasActive = false;
+      for (const [nodeId, state] of revealStatesRef.current) {
+        const elapsed = Math.max(0, now - state.startedAt);
+        const total = LINK_GROW_MS + NODE_GROW_MS + LABEL_FADE_MS;
+        if (elapsed >= total) {
+          revealStatesRef.current.delete(nodeId);
+        } else {
+          const phase = elapsed < LINK_GROW_MS ? 'link-growing' : elapsed < LINK_GROW_MS + NODE_GROW_MS ? 'node-growing' : 'label-fading';
+          revealStatesRef.current.set(nodeId, { ...state, phase });
+          hasActive = true;
+        }
+      }
+      setRevealClock(now);
+      if (hasActive) revealAnimationFrame.current = window.requestAnimationFrame(tick);
+      else revealAnimationFrame.current = undefined;
     };
+    revealAnimationFrame.current = window.requestAnimationFrame(tick);
   }, [layout]);
 
   useEffect(() => () => window.clearTimeout(tooltipTimer.current), []);
@@ -289,12 +337,12 @@ export function BehaviorMapView({
           onPointerLeave={() => setDragStart(undefined)}
         >
           <g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`}>
-            {activeLayout.edges.filter((edge) => edge.kind === 'model-reference').map((edge) => <path className={edgeClassName(edge, activeLayout.nodes, selectedEntity, hoveredNodeId, hoverNeighborhood.edgeIdsByNode)} key={edge.id} d={straightPath(edge)} />)}
-            {activeLayout.edges.filter((edge) => edge.kind !== 'model-reference').map((edge) => <path className={edgeClassName(edge, activeLayout.nodes, selectedEntity, hoveredNodeId, hoverNeighborhood.edgeIdsByNode)} key={edge.id} d={straightPath(edge)} />)}
+            {activeLayout.edges.filter((edge) => edge.kind === 'model-reference').map((edge) => renderEdge(edge, activeLayout.nodes, selectedEntity, hoveredNodeId, hoverNeighborhood.edgeIdsByNode, revealStates, revealClock))}
+            {activeLayout.edges.filter((edge) => edge.kind !== 'model-reference').map((edge) => renderEdge(edge, activeLayout.nodes, selectedEntity, hoveredNodeId, hoverNeighborhood.edgeIdsByNode, revealStates, revealClock))}
             {activeLayout.nodes.map((node) => (
-            <g className={nodeClassName(node, selectedVisualNodeIds, hoveredNodeId, hoverNeighborhood.neighborsByNode, hoverNeighborhood.childrenByNode)} key={node.id} transform={`translate(${node.x} ${node.y})`} onPointerEnter={(event) => showTooltip(node, event)} onPointerMove={moveTooltip} onPointerLeave={hideTooltip} onClick={(event) => { event.stopPropagation(); selectNode(node); if (node.kind === 'semantic-area' || node.kind === 'workflow' || node.kind === 'aggregated-workflow') toggleNode(node); }}>
+            <g className={nodeClassName(node, selectedVisualNodeIds, hoveredNodeId, hoverNeighborhood.neighborsByNode, hoverNeighborhood.childrenByNode, revealStates.get(node.id))} key={node.id} transform={nodeTransform(node, revealStates.get(node.id), revealClock)} onPointerEnter={(event) => showTooltip(node, event)} onPointerMove={moveTooltip} onPointerLeave={hideTooltip} onClick={(event) => { event.stopPropagation(); selectNode(node); if (node.kind === 'semantic-area' || node.kind === 'workflow' || node.kind === 'aggregated-workflow') toggleNode(node); }}>
               {node.shape === 'pill' ? <rect className="behavior-map-pill" x={-node.width / 2} y={-node.height / 2} width={node.width} height={node.height} rx={node.height / 2} /> : <circle className="behavior-map-circle" r={node.radius} />}
-              <text className="behavior-map-label" textAnchor="middle" dominantBaseline="middle">{node.displayLines.map((line, index) => <tspan key={`${node.id}-label-${index}`} x="0" dy={index === 0 ? labelStartDy(node) : 14}>{line}</tspan>)}{node.kind === 'semantic-area' && !node.expanded ? <tspan x="0" dy="16">{node.sizeWeight} workflows</tspan> : null}{node.workflowSubtype === 'aggregated' ? <tspan className="behavior-map-label-tag" x="0" dy="16">aggregate</tspan> : null}</text>
+              <text className="behavior-map-label" style={labelRevealStyle(revealStates.get(node.id), revealClock)} textAnchor="middle" dominantBaseline="middle">{node.displayLines.map((line, index) => <tspan key={`${node.id}-label-${index}`} x="0" dy={index === 0 ? labelStartDy(node) : 14}>{line}</tspan>)}{node.kind === 'semantic-area' && !node.expanded ? <tspan x="0" dy="16">{node.sizeWeight} workflows</tspan> : null}{node.workflowSubtype === 'aggregated' ? <tspan className="behavior-map-label-tag" x="0" dy="16">aggregate</tspan> : null}</text>
               {node.diagnostics && (node.diagnostics.errors + node.diagnostics.warnings + node.diagnostics.info > 0) ? <text className="behavior-map-badge" x={node.radius} y={-node.radius}>{node.diagnostics.errors || node.diagnostics.warnings || node.diagnostics.info}</text> : null}
             </g>
             ))}
@@ -328,7 +376,45 @@ function labelStartDy(node: { readonly displayLines: readonly string[] }): numbe
   return node.displayLines.length > 1 ? -7 : 0;
 }
 
-function nodeClassName(node: BehaviorMapNode & { readonly shape: string; readonly expanded: boolean }, selectedVisualNodeIds: ReadonlySet<string>, hoveredNodeId: string | undefined, neighborsByNode: ReadonlyMap<string, ReadonlySet<string>>, childrenByNode: ReadonlyMap<string, ReadonlySet<string>>): string {
+
+function renderEdge(edge: BehaviorMapLayoutEdge, nodes: readonly BehaviorMapLayoutNode[], selectedEntity: PathDerivedEntitySelection, hoveredNodeId: string | undefined, edgeIdsByNode: ReadonlyMap<string, ReadonlySet<string>>, revealStates: ReadonlyMap<string, RevealState>, now: number) {
+  const reveal = revealStates.get(edge.target);
+  const className = edgeClassName(edge, nodes, selectedEntity, hoveredNodeId, edgeIdsByNode) + (reveal ? ' behavior-map-edge--revealing' : '');
+  if (!reveal) return <path className={className} key={edge.id} d={straightPath(edge)} />;
+  const progress = revealProgress(reveal, now, LINK_GROW_MS, 0);
+  const end = interpolatePoint({ x: edge.sourceX, y: edge.sourceY }, { x: edge.targetX, y: edge.targetY }, easeOutCubic(progress));
+  const target = nodes.find((node) => node.id === edge.target);
+  return <g key={edge.id} className={`behavior-map-reveal behavior-map-reveal--${target?.kind ?? 'unknown'}`}><path className={className} d={`M ${edge.sourceX} ${edge.sourceY} L ${end.x} ${end.y}`} />{reveal.phase === 'link-growing' ? <circle className="behavior-map-reveal-dot" cx={end.x} cy={end.y} r="7" /> : null}</g>;
+}
+
+function nodeTransform(node: BehaviorMapLayoutNode, reveal: RevealState | undefined, now: number): string {
+  if (!reveal || reveal.phase === 'label-fading' || reveal.phase === 'settled') return `translate(${node.x} ${node.y})`;
+  if (reveal.phase === 'link-growing') return `translate(${node.x} ${node.y}) scale(0.01)`;
+  const scale = 0.18 + easeOutBack(revealProgress(reveal, now, NODE_GROW_MS, LINK_GROW_MS)) * 0.82;
+  return `translate(${node.x} ${node.y}) scale(${scale})`;
+}
+
+function labelRevealStyle(reveal: RevealState | undefined, now: number): { opacity?: number } | undefined {
+  if (!reveal) return undefined;
+  if (reveal.phase === 'link-growing' || reveal.phase === 'node-growing') return { opacity: 0 };
+  return { opacity: revealProgress(reveal, now, LABEL_FADE_MS, LINK_GROW_MS + NODE_GROW_MS) };
+}
+
+function revealProgress(reveal: RevealState, now: number, duration: number, offset: number): number {
+  return Math.max(0, Math.min(1, (now - reveal.startedAt - offset) / duration));
+}
+
+function interpolatePoint(start: { readonly x: number; readonly y: number }, end: { readonly x: number; readonly y: number }, progress: number) {
+  return { x: lerp(start.x, end.x, progress), y: lerp(start.y, end.y, progress) };
+}
+
+function easeOutBack(progress: number): number {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(progress - 1, 3) + c1 * Math.pow(progress - 1, 2);
+}
+
+function nodeClassName(node: BehaviorMapNode & { readonly shape: string; readonly expanded: boolean }, selectedVisualNodeIds: ReadonlySet<string>, hoveredNodeId: string | undefined, neighborsByNode: ReadonlyMap<string, ReadonlySet<string>>, childrenByNode: ReadonlyMap<string, ReadonlySet<string>>, revealState?: RevealState): string {
   const isNodeSelected = selectedVisualNodeIds.has(node.id);
   const isHovered = hoveredNodeId === node.id;
   const focusNodeIds = hoveredNodeId ? new Set([hoveredNodeId]) : selectedVisualNodeIds;
@@ -347,6 +433,7 @@ function nodeClassName(node: BehaviorMapNode & { readonly shape: string; readonl
     isNeighbor ? 'behavior-map-node--neighbor' : undefined,
     isChild ? 'behavior-map-node--child' : undefined,
     isDimmed ? 'behavior-map-node--dimmed' : undefined,
+    revealState ? `behavior-map-node--reveal-${revealState.phase}` : undefined,
   ].filter(Boolean).join(' ');
 }
 

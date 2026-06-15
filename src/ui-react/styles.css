@@ -1970,6 +1970,34 @@ html { font-size: 15px; }
   letter-spacing: 0.08em;
 }
 
+
+.behavior-map-edge--revealing {
+  opacity: 1;
+  stroke-width: 2.3;
+  animation: none;
+}
+
+.behavior-map-reveal { pointer-events: none; }
+.behavior-map-reveal-dot {
+  fill: #93c5fd;
+  stroke: rgba(239, 246, 255, 0.82);
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 12px rgba(96, 165, 250, 0.82));
+}
+.behavior-map-reveal--capability .behavior-map-reveal-dot { fill: #f59e0b; filter: drop-shadow(0 0 12px rgba(245, 158, 11, 0.86)); }
+.behavior-map-reveal--semantic-area .behavior-map-reveal-dot { fill: #a78bfa; filter: drop-shadow(0 0 12px rgba(167, 139, 250, 0.86)); }
+.behavior-map-reveal--aggregated-workflow .behavior-map-reveal-dot { fill: #fbbf24; filter: drop-shadow(0 0 12px rgba(251, 191, 36, 0.86)); }
+.behavior-map-node--reveal-link-growing {
+  opacity: 0;
+  animation: none;
+  pointer-events: none;
+}
+.behavior-map-node--reveal-node-growing,
+.behavior-map-node--reveal-label-fading {
+  opacity: 1;
+  animation: none;
+}
+
 @keyframes behavior-map-fade-in { to { opacity: 1; } }
 @keyframes behavior-map-node-emerge {
   from { opacity: 0; }

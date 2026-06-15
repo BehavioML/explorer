@@ -1,7 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { DiagnosticViewModel, EntitySummaryViewModel, PathDerivedEntityIndex, PathDerivedEntitySelection, SemanticReferenceIndexViewModel } from '../core';
 import { createBehaviorMapGraph, parseBehaviorMapRef, type BehaviorMapNode } from '../model-map/behaviorMapGraph';
 import { layoutBehaviorMapGraph, type BehaviorMapLayoutEdge } from '../model-map/behaviorMapLayout';
+
+const MIN_ZOOM = 0.2;
+const MAX_ZOOM = 3;
+const FIT_TRANSITION_MS = 250;
+
+type ViewportSize = { readonly width: number; readonly height: number };
+type PositionSnapshot = { readonly x: number; readonly y: number; readonly vx?: number; readonly vy?: number };
 
 export function BehaviorMapView({
   entityIndex,
@@ -24,12 +31,82 @@ export function BehaviorMapView({
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>();
+  const [viewport, setViewport] = useState<ViewportSize>({ width: 1, height: 1 });
+  const [isViewAnimating, setViewAnimating] = useState(false);
+  const canvasFrameRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<SVGSVGElement | null>(null);
+  const previousPositionsRef = useRef(new Map<string, PositionSnapshot>());
+  const zoomRef = useRef(zoom);
+  const panRef = useRef(pan);
+  const layoutAnimationTimer = useRef<number | undefined>(undefined);
+  const viewAnimationTimer = useRef<number | undefined>(undefined);
+
+  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
+  useEffect(() => { panRef.current = pan; }, [pan]);
+
+  useLayoutEffect(() => {
+    const element = canvasFrameRef.current;
+    if (!element) return;
+    const updateSize = () => {
+      const rect = element.getBoundingClientRect();
+      setViewport({ width: Math.max(1, rect.width), height: Math.max(1, rect.height) });
+    };
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   const graph = useMemo(
     () => entityIndex ? createBehaviorMapGraph({ entityIndex, entitySummaries, referenceIndex, diagnostics, expansion: { expandedNodeIds }, manifestId }) : { nodes: [], edges: [] },
     [diagnostics, entityIndex, entitySummaries, expandedNodeIds, manifestId, referenceIndex],
   );
-  const layout = useMemo(() => layoutBehaviorMapGraph(graph), [graph]);
+  const layout = useMemo(
+    () => layoutBehaviorMapGraph(graph, { width: viewport.width, height: viewport.height, previousPositions: previousPositionsRef.current }),
+    [graph, viewport.height, viewport.width],
+  );
+
+  useEffect(() => {
+    previousPositionsRef.current = new Map(layout.nodes.map((node) => [node.id, { x: node.x, y: node.y }]));
+    window.clearTimeout(layoutAnimationTimer.current);
+    layoutAnimationTimer.current = window.setTimeout(() => setViewAnimating(false), 360);
+    setViewAnimating(true);
+    return () => window.clearTimeout(layoutAnimationTimer.current);
+  }, [layout]);
+
+  const setViewTransform = useCallback((nextZoom: number, nextPan: { x: number; y: number }, animate = false) => {
+    const clampedZoom = clampZoom(nextZoom);
+    if (animate) {
+      window.clearTimeout(viewAnimationTimer.current);
+      setViewAnimating(true);
+      viewAnimationTimer.current = window.setTimeout(() => setViewAnimating(false), FIT_TRANSITION_MS);
+    }
+    setZoom(clampedZoom);
+    setPan(nextPan);
+  }, []);
+
+  const zoomAroundPoint = useCallback((nextZoom: number, point: { x: number; y: number }) => {
+    const currentZoom = zoomRef.current;
+    const currentPan = panRef.current;
+    const clampedZoom = clampZoom(nextZoom);
+    const graphPoint = { x: (point.x - currentPan.x) / currentZoom, y: (point.y - currentPan.y) / currentZoom };
+    setViewTransform(clampedZoom, { x: point.x - graphPoint.x * clampedZoom, y: point.y - graphPoint.y * clampedZoom });
+  }, [setViewTransform]);
+
+  useEffect(() => {
+    const element = canvasRef.current;
+    if (!element) return;
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const rect = element.getBoundingClientRect();
+      const point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+      const factor = Math.exp(-event.deltaY * 0.0016);
+      zoomAroundPoint(zoomRef.current * factor, point);
+    };
+    element.addEventListener('wheel', handleWheel, { passive: false });
+    return () => element.removeEventListener('wheel', handleWheel);
+  }, [zoomAroundPoint]);
 
   if (!entityIndex) {
     return <section className="behavior-map-empty"><h2>Behavior Map</h2><p>Load a workspace to explore semantic areas, workflows, and capabilities.</p></section>;
@@ -67,19 +144,15 @@ export function BehaviorMapView({
   }
 
   function zoomAroundCenter(nextZoom: number) {
-    const clampedZoom = Math.min(2.5, Math.max(0.35, nextZoom));
-    const center = { x: layout.width / 2, y: layout.height / 2 };
-    const graphCenter = { x: (center.x - pan.x) / zoom, y: (center.y - pan.y) / zoom };
-    setZoom(clampedZoom);
-    setPan({ x: center.x - graphCenter.x * clampedZoom, y: center.y - graphCenter.y * clampedZoom });
+    zoomAroundPoint(nextZoom, { x: viewport.width / 2, y: viewport.height / 2 });
   }
 
   function zoomIn() {
-    zoomAroundCenter(zoom + 0.15);
+    zoomAroundCenter(zoom * 1.18);
   }
 
   function zoomOut() {
-    zoomAroundCenter(zoom - 0.15);
+    zoomAroundCenter(zoom / 1.18);
   }
 
   function fitToView() {
@@ -104,15 +177,15 @@ export function BehaviorMapView({
     );
     const graphWidth = Math.max(1, bounds.maxX - bounds.minX);
     const graphHeight = Math.max(1, bounds.maxY - bounds.minY);
-    const nextZoom = Math.min(2.5, Math.max(0.35, Math.min((layout.width - padding * 2) / graphWidth, (layout.height - padding * 2) / graphHeight)));
+    const usableWidth = Math.max(1, viewport.width - padding * 2);
+    const usableHeight = Math.max(1, viewport.height - padding * 2);
+    const nextZoom = clampZoom(Math.min(usableWidth / graphWidth, usableHeight / graphHeight));
     const graphCenter = { x: bounds.minX + graphWidth / 2, y: bounds.minY + graphHeight / 2 };
-    setZoom(nextZoom);
-    setPan({ x: layout.width / 2 - graphCenter.x * nextZoom, y: layout.height / 2 - graphCenter.y * nextZoom });
+    setViewTransform(nextZoom, { x: viewport.width / 2 - graphCenter.x * nextZoom, y: viewport.height / 2 - graphCenter.y * nextZoom }, true);
   }
 
   function resetView() {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
+    setViewTransform(1, { x: 0, y: 0 }, true);
   }
 
   function expandSemanticAreas() {
@@ -128,7 +201,7 @@ export function BehaviorMapView({
         <button type="button" onClick={expandSemanticAreas}>Expand semantic areas</button>
         <button type="button" onClick={expandOneLevel}>Expand one level</button>
       </div>
-      <div className="behavior-map-canvas-frame">
+      <div className="behavior-map-canvas-frame" ref={canvasFrameRef}>
         <div className="behavior-map-navigation-controls" aria-label="Map navigation controls">
           <button type="button" onClick={zoomIn} aria-label="Zoom in">+</button>
           <button type="button" onClick={zoomOut} aria-label="Zoom out">−</button>
@@ -138,11 +211,11 @@ export function BehaviorMapView({
         </div>
         <p className="behavior-map-pan-hint">Drag empty canvas to pan · scroll to zoom</p>
         <svg
-          className="behavior-map-canvas"
-          viewBox={`0 0 ${layout.width} ${layout.height}`}
+          className={isViewAnimating ? 'behavior-map-canvas behavior-map-canvas--animating' : 'behavior-map-canvas'}
+          ref={canvasRef}
+          viewBox={`0 0 ${viewport.width} ${viewport.height}`}
           role="img"
           aria-label="Exploratory behavior map"
-          onWheel={(event) => { event.preventDefault(); zoomAroundCenter(zoom + (event.deltaY < 0 ? 0.08 : -0.08)); }}
           onPointerDown={(event) => { if (event.target === event.currentTarget) setDragStart({ x: event.clientX - pan.x, y: event.clientY - pan.y }); }}
           onPointerMove={(event) => { if (dragStart) setPan({ x: event.clientX - dragStart.x, y: event.clientY - dragStart.y }); }}
           onPointerUp={() => setDragStart(undefined)}
@@ -163,6 +236,10 @@ export function BehaviorMapView({
       </div>
     </section>
   );
+}
+
+function clampZoom(value: number): number {
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
 }
 
 function isSelected(node: { readonly ref: string }, selected: PathDerivedEntitySelection): boolean {

@@ -532,6 +532,8 @@ export function App() {
     );
   }
 
+  const isMapViewActive = activeActivity === 'map';
+
   const workbenchLayoutStyle = {
     '--explorer-width': `${layoutSizes.explorerWidth}px`,
     '--inspector-width': `${layoutSizes.inspectorWidth}px`,
@@ -541,7 +543,11 @@ export function App() {
 
   return (
     <main
-      className={isDiagnosticsExpanded ? 'workbench-shell workbench-shell--diagnostics-expanded' : 'workbench-shell'}
+      className={[
+        'workbench-shell',
+        isDiagnosticsExpanded ? 'workbench-shell--diagnostics-expanded' : undefined,
+        isMapViewActive ? 'workbench-shell--map-focus-mode' : undefined,
+      ].filter(Boolean).join(' ')}
       style={workbenchLayoutStyle}
       aria-label="BehavioML Explorer workbench"
     >
@@ -554,39 +560,43 @@ export function App() {
       />
 
       <div className="workbench-body">
-        <ModelElementRail
-          activeCategory={activeModelCategory}
-          index={entityIndex}
-          isExpanded={isModelRailExpanded}
-          onSelectCategory={(category) => {
-            setActiveModelCategory(category);
-            setActiveActivity(category === 'map' ? 'map' : 'explorer');
-          }}
-          onToggleExpanded={() => setModelRailExpanded((expanded) => !expanded)}
-        />
-        <ExplorerPanel
-          activeActivity={activeActivity}
-          activeModelCategory={activeModelCategory}
-          index={entityIndex}
-          relationships={selectedRelationships}
-          searchResults={searchResults}
-          searchText={searchText}
-          selectedEntity={selectedEntity}
-          selectedSearchResult={selectedSearchResult}
-          validation={validation}
-          onSelectDiagramWorkflow={handleDiagramWorkflowSelected}
-          workspaceOverview={workspaceOverview}
-          onRelationshipTargetSelected={handleRelationshipTargetSelected}
-          onSearchQueryChanged={handleSearchQueryChanged}
-          onSearchResultSelected={handleSearchResultSelected}
-          onSelectActivity={setActiveActivity}
-          onSelectEntity={handleEntitySelected}
-        />
-        <ResizeHandle
-          orientation="vertical"
-          label="Resize Explorer panel"
-          onResize={resizeExplorerPanel}
-        />
+        {!isMapViewActive ? (
+          <>
+            <ModelElementRail
+              activeCategory={activeModelCategory}
+              index={entityIndex}
+              isExpanded={isModelRailExpanded}
+              onSelectCategory={(category) => {
+                setActiveModelCategory(category);
+                setActiveActivity(category === 'map' ? 'map' : 'explorer');
+              }}
+              onToggleExpanded={() => setModelRailExpanded((expanded) => !expanded)}
+            />
+            <ExplorerPanel
+              activeActivity={activeActivity}
+              activeModelCategory={activeModelCategory}
+              index={entityIndex}
+              relationships={selectedRelationships}
+              searchResults={searchResults}
+              searchText={searchText}
+              selectedEntity={selectedEntity}
+              selectedSearchResult={selectedSearchResult}
+              validation={validation}
+              onSelectDiagramWorkflow={handleDiagramWorkflowSelected}
+              workspaceOverview={workspaceOverview}
+              onRelationshipTargetSelected={handleRelationshipTargetSelected}
+              onSearchQueryChanged={handleSearchQueryChanged}
+              onSearchResultSelected={handleSearchResultSelected}
+              onSelectActivity={setActiveActivity}
+              onSelectEntity={handleEntitySelected}
+            />
+            <ResizeHandle
+              orientation="vertical"
+              label="Resize Explorer panel"
+              onResize={resizeExplorerPanel}
+            />
+          </>
+        ) : null}
         <WorkspaceTabs
           activeActivity={activeActivity}
           activeDocument={activeDocument}
@@ -611,30 +621,26 @@ export function App() {
           onSelectMapEntityFromView={handleMapEntitySelected}
           onWorkflowCompositionModeChanged={setWorkflowCompositionMode}
         />
-        {activeActivity === 'map' && !selected ? null : (
-          <ResizeHandle
-            orientation="vertical"
-            label="Resize Inspector panel"
-            onResize={resizeInspectorPanel}
-          />
-        )}
-        {activeActivity === 'map' && !selected ? null : (
-          <InspectorPanel
-            entity={selected}
-            relationships={selectedRelationships}
-            selectedDiagnostic={selectedDiagnostic}
-            selectedDiagnostics={selectedDiagnostics}
-            selectedSearchResult={selectedSearchResult}
-            sourceView={sourceView}
-            validation={validation}
-            diagramView={displayedDiagramView}
-            onOpenDiagrams={() => setActiveActivity('diagrams')}
-            onExploreWorkflows={() => { setActiveModelCategory('workflows'); setActiveActivity('explorer'); }}
-            onViewDiagnostics={() => setDiagnosticsExpanded(true)}
-            onRefreshWorkspace={() => window.location.reload()}
-            onShowMap={() => { setActiveModelCategory('map'); setActiveActivity('map'); }}
-          />
-        )}
+        <ResizeHandle
+          orientation="vertical"
+          label="Resize Inspector panel"
+          onResize={resizeInspectorPanel}
+        />
+        <InspectorPanel
+          entity={selected}
+          relationships={selectedRelationships}
+          selectedDiagnostic={selectedDiagnostic}
+          selectedDiagnostics={selectedDiagnostics}
+          selectedSearchResult={selectedSearchResult}
+          sourceView={sourceView}
+          validation={validation}
+          diagramView={displayedDiagramView}
+          onOpenDiagrams={() => setActiveActivity('diagrams')}
+          onExploreWorkflows={() => { setActiveModelCategory('workflows'); setActiveActivity('explorer'); }}
+          onViewDiagnostics={() => setDiagnosticsExpanded(true)}
+          onRefreshWorkspace={() => window.location.reload()}
+          onShowMap={() => { setActiveModelCategory('map'); setActiveActivity('map'); }}
+        />
       </div>
 
       <DiagnosticsPanel
@@ -1071,9 +1077,10 @@ function WorkspaceTabs({
     onSelectMapEntityFromView(selection);
   }
   return (
-    <section className="workspace-area" aria-label="Workspace tabs and content">
-      <div className="workspace-tab-strip" role="tablist" aria-label="Workspace documents">
-        {documents.map((document) => {
+    <section className={activeActivity === 'map' ? 'workspace-area workspace-area--map-focus-mode' : 'workspace-area'} aria-label="Workspace tabs and content">
+      {activeActivity !== 'map' ? (
+        <div className="workspace-tab-strip" role="tablist" aria-label="Workspace documents">
+          {documents.map((document) => {
           const isActive = activeDocument.id === document.id;
           const isClosable = document.kind !== 'overview';
           const label = formatWorkspaceDocumentLabel(document, entity);
@@ -1107,8 +1114,9 @@ function WorkspaceTabs({
               ) : null}
             </div>
           );
-        })}
-      </div>
+          })}
+        </div>
+      ) : null}
 
       <div className="workspace-content">
         {activeDocument.kind === 'overview' && activeActivity !== 'diagrams' && activeActivity !== 'map' ? (

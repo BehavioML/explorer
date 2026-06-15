@@ -9,6 +9,7 @@ export function BehaviorMapView({
   referenceIndex,
   diagnostics,
   selectedEntity,
+  manifestId,
   onSelectEntity,
 }: {
   readonly entityIndex: PathDerivedEntityIndex | undefined;
@@ -16,6 +17,7 @@ export function BehaviorMapView({
   readonly referenceIndex?: SemanticReferenceIndexViewModel;
   readonly diagnostics?: readonly DiagnosticViewModel[];
   readonly selectedEntity: PathDerivedEntitySelection;
+  readonly manifestId?: string;
   readonly onSelectEntity: (selection: PathDerivedEntitySelection) => void;
 }) {
   const [expandedNodeIds, setExpandedNodeIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -24,8 +26,8 @@ export function BehaviorMapView({
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>();
 
   const graph = useMemo(
-    () => entityIndex ? createBehaviorMapGraph({ entityIndex, entitySummaries, referenceIndex, diagnostics, expansion: { expandedNodeIds } }) : { nodes: [], edges: [] },
-    [diagnostics, entityIndex, entitySummaries, expandedNodeIds, referenceIndex],
+    () => entityIndex ? createBehaviorMapGraph({ entityIndex, entitySummaries, referenceIndex, diagnostics, expansion: { expandedNodeIds }, manifestId }) : { nodes: [], edges: [] },
+    [diagnostics, entityIndex, entitySummaries, expandedNodeIds, manifestId, referenceIndex],
   );
   const layout = useMemo(() => layoutBehaviorMapGraph(graph), [graph]);
 
@@ -34,7 +36,7 @@ export function BehaviorMapView({
   }
 
   function toggleNode(node: BehaviorMapNode) {
-    if (node.kind === 'capability') return;
+    if (node.kind === 'capability' || node.kind === 'event' || node.kind === 'entity' || node.kind === 'state-machine' || node.kind === 'decision' || node.kind === 'manifest') return;
     setExpandedNodeIds((current) => {
       const next = new Set(current);
       if (next.has(node.id)) next.delete(node.id);
@@ -45,7 +47,7 @@ export function BehaviorMapView({
 
   function selectNode(node: BehaviorMapNode) {
     const ref = parseBehaviorMapRef(node.ref);
-    if (!ref) return;
+    if (!ref || ref.scope === 'manifest') return;
     onSelectEntity({ scope: ref.scope as never, identity: ref.identity });
   }
 
@@ -58,7 +60,7 @@ export function BehaviorMapView({
     setExpandedNodeIds((current) => {
       const next = new Set(current);
       for (const node of layout.nodes) {
-        if (node.kind !== 'capability') next.add(node.id);
+        if (node.kind === 'semantic-area' || node.kind === 'workflow' || node.kind === 'aggregated-workflow') next.add(node.id);
       }
       return next;
     });
@@ -106,7 +108,7 @@ export function BehaviorMapView({
         <g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`}>
           {layout.edges.map((edge) => <path className={`behavior-map-edge behavior-map-edge--${edge.kind}`} key={edge.id} d={curvedPath(edge)} />)}
           {layout.nodes.map((node) => (
-            <g className={`behavior-map-node behavior-map-node--${node.kind} behavior-map-node--${node.shape} ${node.expanded ? 'behavior-map-node--expanded' : ''} ${node.workflowSubtype ? `behavior-map-node--${node.workflowSubtype}` : ''} ${isSelected(node, selectedEntity) ? 'behavior-map-node--selected' : ''}`} key={node.id} transform={`translate(${node.x} ${node.y})`} onClick={(event) => { event.stopPropagation(); selectNode(node); if (node.kind !== 'capability') toggleNode(node); }}>
+            <g className={`behavior-map-node behavior-map-node--${node.kind} behavior-map-node--${node.shape} ${node.expanded ? 'behavior-map-node--expanded' : ''} ${node.workflowSubtype ? `behavior-map-node--${node.workflowSubtype}` : ''} ${isSelected(node, selectedEntity) ? 'behavior-map-node--selected' : ''}`} key={node.id} transform={`translate(${node.x} ${node.y})`} onClick={(event) => { event.stopPropagation(); selectNode(node); if (node.kind === 'semantic-area' || node.kind === 'workflow' || node.kind === 'aggregated-workflow') toggleNode(node); }}>
               <title>{node.label} — {node.ref}{node.workflowSubtype === 'aggregated' ? ' (aggregate)' : ''}</title>
               {node.shape === 'pill' ? <rect className="behavior-map-pill" x={-node.width / 2} y={-node.height / 2} width={node.width} height={node.height} rx={node.height / 2} /> : <circle className="behavior-map-circle" r={node.radius} />}
               <text className="behavior-map-label" textAnchor="middle" dominantBaseline="middle">{node.displayLines.map((line, index) => <tspan key={`${node.id}-label-${index}`} x="0" dy={index === 0 ? labelStartDy(node) : 14}>{line}</tspan>)}{node.kind === 'semantic-area' && !node.expanded ? <tspan x="0" dy="16">{node.sizeWeight} workflows</tspan> : null}{node.workflowSubtype === 'aggregated' ? <tspan className="behavior-map-label-tag" x="0" dy="16">aggregate</tspan> : null}</text>

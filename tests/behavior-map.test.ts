@@ -29,7 +29,7 @@ const referenceIndex: SemanticReferenceIndexViewModel = {
 
 const expanded = new Set([
   toBehaviorMapNodeId('semantic-area', 'semantic-areas', 'customer'),
-  toBehaviorMapNodeId('workflow', 'workflows', 'customer/onboard'),
+  toBehaviorMapNodeId('aggregated-workflow', 'workflows', 'customer/onboard'),
   toBehaviorMapNodeId('workflow', 'workflows', 'customer/verify'),
 ]);
 
@@ -42,7 +42,9 @@ test('behavior map graph has stable ids, valid endpoints, valid scopes, and only
   assert.equal(new Set(graph.nodes.map((node) => node.id)).size, graph.nodes.length);
   assert.equal(new Set(graph.edges.map((edge) => edge.id)).size, graph.edges.length);
   assert.ok(graph.edges.every((edge) => graph.nodes.some((node) => node.id === edge.source) && graph.nodes.some((node) => node.id === edge.target)));
-  assert.ok(graph.nodes.every((node) => ['semantic-area', 'workflow', 'capability'].includes(node.kind)));
+  assert.ok(graph.nodes.some((node) => node.kind === 'manifest' && node.label === 'BehavioML manifest'));
+  assert.ok(graph.edges.some((edge) => edge.kind === 'manifest-contains-semantic-area'));
+  assert.ok(graph.nodes.every((node) => ['manifest', 'semantic-area', 'aggregated-workflow', 'workflow', 'capability'].includes(node.kind)));
 });
 
 test('behavior map layout assigns finite separated positions and includes node extents in bounds', () => {
@@ -68,12 +70,12 @@ test('shared child uses one deterministic primary placement without being moved 
   const graph = createBehaviorMapGraph({ entityIndex: createPathDerivedEntityIndex(files), referenceIndex, expansion: { expandedNodeIds: expanded } });
   const layout = layoutBehaviorMapGraph(graph);
   const capability = layout.nodes.find((node) => node.id === toBehaviorMapNodeId('capability', 'capabilities', 'customer/check_identity'));
-  const onboard = layout.nodes.find((node) => node.id === toBehaviorMapNodeId('workflow', 'workflows', 'customer/onboard'));
+  const onboard = layout.nodes.find((node) => node.id === toBehaviorMapNodeId('aggregated-workflow', 'workflows', 'customer/onboard'));
   const verify = layout.nodes.find((node) => node.id === toBehaviorMapNodeId('workflow', 'workflows', 'customer/verify'));
 
   assert.ok(capability && onboard && verify);
-  assert.equal(capability.x, onboard.x + 300);
-  assert.notDeepEqual([capability.x, capability.y], [verify.x + 300, verify.y]);
+  assert.notDeepEqual([capability.x, capability.y], [onboard.x, onboard.y]);
+  assert.notDeepEqual([capability.x, capability.y], [verify.x, verify.y]);
 });
 
 function assertDistinctSiblingPositions(nodes: readonly BehaviorMapLayoutNode[], childIds: readonly string[]) {

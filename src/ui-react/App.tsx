@@ -600,6 +600,7 @@ export function App() {
           sourceView={sourceView}
           validation={validation}
           workspaceOverview={workspaceOverview}
+          workspaceManifestId={workspaceManifest?.id}
           entityIndex={entityIndex}
           relationships={selectedRelationships}
           onRelationshipTargetSelected={handleRelationshipTargetSelected}
@@ -1038,6 +1039,7 @@ function WorkspaceTabs({
   onSelectEntityView,
   onSelectMapEntityFromView,
   onWorkflowCompositionModeChanged,
+  workspaceManifestId,
 }: {
   readonly activeActivity: ActivityMode;
   readonly activeDocument: WorkspaceDocument;
@@ -1053,6 +1055,7 @@ function WorkspaceTabs({
   readonly sourceView: SourceFileViewModel | undefined;
   readonly validation: ValidationResultViewModel | undefined;
   readonly workspaceOverview: WorkspaceOverviewViewModel | undefined;
+  readonly workspaceManifestId: string | undefined;
   readonly onRelationshipTargetSelected: (
     reference: SemanticReferenceViewModel,
     side: RelationshipNavigationSide,
@@ -1128,6 +1131,7 @@ function WorkspaceTabs({
             referenceIndex={validation?.referenceIndex}
             diagnostics={validation?.diagnostics}
             selectedEntity={undefined}
+            manifestId={workspaceManifestId}
             onSelectEntity={onSelectMapEntity}
           />
         ) : null}
@@ -1138,6 +1142,7 @@ function WorkspaceTabs({
             referenceIndex={validation?.referenceIndex}
             diagnostics={validation?.diagnostics}
             selectedEntity={getActiveEntitySelection(activeDocument)}
+            manifestId={workspaceManifestId}
             onSelectEntity={onSelectMapEntity}
           />
         ) : null}

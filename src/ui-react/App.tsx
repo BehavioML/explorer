@@ -560,18 +560,18 @@ export function App() {
       />
 
       <div className="workbench-body">
+        <ModelElementRail
+          activeCategory={activeModelCategory}
+          index={entityIndex}
+          isExpanded={isModelRailExpanded}
+          onSelectCategory={(category) => {
+            setActiveModelCategory(category);
+            setActiveActivity(category === 'map' ? 'map' : 'explorer');
+          }}
+          onToggleExpanded={() => setModelRailExpanded((expanded) => !expanded)}
+        />
         {!isMapViewActive ? (
           <>
-            <ModelElementRail
-              activeCategory={activeModelCategory}
-              index={entityIndex}
-              isExpanded={isModelRailExpanded}
-              onSelectCategory={(category) => {
-                setActiveModelCategory(category);
-                setActiveActivity(category === 'map' ? 'map' : 'explorer');
-              }}
-              onToggleExpanded={() => setModelRailExpanded((expanded) => !expanded)}
-            />
             <ExplorerPanel
               activeActivity={activeActivity}
               activeModelCategory={activeModelCategory}

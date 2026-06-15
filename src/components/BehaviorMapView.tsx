@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import type { DiagnosticViewModel, EntitySummaryViewModel, PathDerivedEntityIndex, PathDerivedEntitySelection, SemanticReferenceIndexViewModel } from '../core';
 import { createBehaviorMapGraph, parseBehaviorMapRef, type BehaviorMapNode } from '../model-map/behaviorMapGraph';
 import { layoutBehaviorMapGraph, type BehaviorMapLayoutEdge } from '../model-map/behaviorMapLayout';
@@ -9,6 +9,7 @@ const FIT_TRANSITION_MS = 250;
 
 type ViewportSize = { readonly width: number; readonly height: number };
 type PositionSnapshot = { readonly x: number; readonly y: number; readonly vx?: number; readonly vy?: number };
+type TooltipState = { readonly nodeId: string; readonly x: number; readonly y: number };
 
 export function BehaviorMapView({
   entityIndex,
@@ -33,6 +34,8 @@ export function BehaviorMapView({
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>();
   const [viewport, setViewport] = useState<ViewportSize>({ width: 1, height: 1 });
   const [isViewAnimating, setViewAnimating] = useState(false);
+  const [hoveredNodeId, setHoveredNodeId] = useState<string>();
+  const [tooltip, setTooltip] = useState<TooltipState>();
   const canvasFrameRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<SVGSVGElement | null>(null);
   const previousPositionsRef = useRef(new Map<string, PositionSnapshot>());
@@ -40,6 +43,7 @@ export function BehaviorMapView({
   const panRef = useRef(pan);
   const layoutAnimationTimer = useRef<number | undefined>(undefined);
   const viewAnimationTimer = useRef<number | undefined>(undefined);
+  const tooltipTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => { zoomRef.current = zoom; }, [zoom]);
   useEffect(() => { panRef.current = pan; }, [pan]);
@@ -65,6 +69,24 @@ export function BehaviorMapView({
     () => layoutBehaviorMapGraph(graph, { width: viewport.width, height: viewport.height, previousPositions: previousPositionsRef.current }),
     [graph, viewport.height, viewport.width],
   );
+  const hoverNeighborhood = useMemo(() => {
+    const neighborsByNode = new Map<string, Set<string>>();
+    const childrenByNode = new Map<string, Set<string>>();
+    const edgeIdsByNode = new Map<string, Set<string>>();
+    for (const edge of layout.edges) {
+      if (!neighborsByNode.has(edge.source)) neighborsByNode.set(edge.source, new Set());
+      if (!neighborsByNode.has(edge.target)) neighborsByNode.set(edge.target, new Set());
+      if (!childrenByNode.has(edge.source)) childrenByNode.set(edge.source, new Set());
+      if (!edgeIdsByNode.has(edge.source)) edgeIdsByNode.set(edge.source, new Set());
+      if (!edgeIdsByNode.has(edge.target)) edgeIdsByNode.set(edge.target, new Set());
+      neighborsByNode.get(edge.source)?.add(edge.target);
+      neighborsByNode.get(edge.target)?.add(edge.source);
+      childrenByNode.get(edge.source)?.add(edge.target);
+      edgeIdsByNode.get(edge.source)?.add(edge.id);
+      edgeIdsByNode.get(edge.target)?.add(edge.id);
+    }
+    return { neighborsByNode, childrenByNode, edgeIdsByNode };
+  }, [layout.edges]);
 
   useEffect(() => {
     previousPositionsRef.current = new Map(layout.nodes.map((node) => [node.id, { x: node.x, y: node.y }]));
@@ -73,6 +95,8 @@ export function BehaviorMapView({
     setViewAnimating(true);
     return () => window.clearTimeout(layoutAnimationTimer.current);
   }, [layout]);
+
+  useEffect(() => () => window.clearTimeout(tooltipTimer.current), []);
 
   const setViewTransform = useCallback((nextZoom: number, nextPan: { x: number; y: number }, animate = false) => {
     const clampedZoom = clampZoom(nextZoom);
@@ -192,6 +216,26 @@ export function BehaviorMapView({
     setExpandedNodeIds((current) => new Set([...current, ...graph.nodes.filter((node) => node.kind === 'semantic-area').map((node) => node.id)]));
   }
 
+  function showTooltip(node: BehaviorMapNode, event: PointerEvent) {
+    setHoveredNodeId(node.id);
+    window.clearTimeout(tooltipTimer.current);
+    tooltipTimer.current = window.setTimeout(() => setTooltip({ nodeId: node.id, ...tooltipPosition(event.clientX, event.clientY) }), 180);
+  }
+
+  function moveTooltip(event: PointerEvent) {
+    if (!tooltip) return;
+    setTooltip((current) => current ? { ...current, ...tooltipPosition(event.clientX, event.clientY) } : current);
+  }
+
+  function hideTooltip() {
+    window.clearTimeout(tooltipTimer.current);
+    setHoveredNodeId(undefined);
+    setTooltip(undefined);
+  }
+
+  const tooltipNode = tooltip ? layout.nodes.find((node) => node.id === tooltip.nodeId) : undefined;
+  const tooltipStyle = tooltip ? { left: tooltip.x, top: tooltip.y } : undefined;
+
   return (
     <section className="behavior-map-view" aria-labelledby="behavior-map-title">
       <div className="behavior-map-toolbar">
@@ -222,9 +266,9 @@ export function BehaviorMapView({
           onPointerLeave={() => setDragStart(undefined)}
         >
           <g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`}>
-            {layout.edges.map((edge) => <path className={`behavior-map-edge behavior-map-edge--${edge.kind}`} key={edge.id} d={curvedPath(edge)} />)}
+            {layout.edges.map((edge) => <path className={edgeClassName(edge, hoveredNodeId, hoverNeighborhood.edgeIdsByNode)} key={edge.id} d={straightPath(edge)} />)}
             {layout.nodes.map((node) => (
-            <g className={`behavior-map-node behavior-map-node--${node.kind} behavior-map-node--${node.shape} ${node.expanded ? 'behavior-map-node--expanded' : ''} ${node.workflowSubtype ? `behavior-map-node--${node.workflowSubtype}` : ''} ${isSelected(node, selectedEntity) ? 'behavior-map-node--selected' : ''}`} key={node.id} transform={`translate(${node.x} ${node.y})`} onClick={(event) => { event.stopPropagation(); selectNode(node); if (node.kind === 'semantic-area' || node.kind === 'workflow' || node.kind === 'aggregated-workflow') toggleNode(node); }}>
+            <g className={nodeClassName(node, selectedEntity, hoveredNodeId, hoverNeighborhood.neighborsByNode, hoverNeighborhood.childrenByNode)} key={node.id} transform={`translate(${node.x} ${node.y})`} onPointerEnter={(event) => showTooltip(node, event)} onPointerMove={moveTooltip} onPointerLeave={hideTooltip} onClick={(event) => { event.stopPropagation(); selectNode(node); if (node.kind === 'semantic-area' || node.kind === 'workflow' || node.kind === 'aggregated-workflow') toggleNode(node); }}>
               <title>{node.label} — {node.ref}{node.workflowSubtype === 'aggregated' ? ' (aggregate)' : ''}</title>
               {node.shape === 'pill' ? <rect className="behavior-map-pill" x={-node.width / 2} y={-node.height / 2} width={node.width} height={node.height} rx={node.height / 2} /> : <circle className="behavior-map-circle" r={node.radius} />}
               <text className="behavior-map-label" textAnchor="middle" dominantBaseline="middle">{node.displayLines.map((line, index) => <tspan key={`${node.id}-label-${index}`} x="0" dy={index === 0 ? labelStartDy(node) : 14}>{line}</tspan>)}{node.kind === 'semantic-area' && !node.expanded ? <tspan x="0" dy="16">{node.sizeWeight} workflows</tspan> : null}{node.workflowSubtype === 'aggregated' ? <tspan className="behavior-map-label-tag" x="0" dy="16">aggregate</tspan> : null}</text>
@@ -233,6 +277,14 @@ export function BehaviorMapView({
             ))}
           </g>
         </svg>
+        {tooltipNode && tooltipStyle ? (
+          <div className="behavior-map-tooltip" style={tooltipStyle} role="status">
+            <strong>{tooltipNode.label}</strong>
+            <span>{formatKind(tooltipNode.kind)}</span>
+            <code>{tooltipNode.ref}</code>
+            <small>{tooltipSummary(tooltipNode, hoverNeighborhood.childrenByNode)}</small>
+          </div>
+        ) : null}
       </div>
     </section>
   );
@@ -247,12 +299,56 @@ function isSelected(node: { readonly ref: string }, selected: PathDerivedEntityS
   return Boolean(ref && selected?.scope === ref.scope && selected.identity === ref.identity);
 }
 
-function curvedPath(edge: BehaviorMapLayoutEdge): string {
-  const direction = edge.targetX >= edge.sourceX ? 1 : -1;
-  const delta = Math.max(80, Math.abs(edge.targetX - edge.sourceX) * 0.55);
-  return `M ${edge.sourceX} ${edge.sourceY} C ${edge.sourceX + direction * delta} ${edge.sourceY}, ${edge.targetX - direction * delta} ${edge.targetY}, ${edge.targetX} ${edge.targetY}`;
+function straightPath(edge: BehaviorMapLayoutEdge): string {
+  return `M ${edge.sourceX} ${edge.sourceY} L ${edge.targetX} ${edge.targetY}`;
 }
 
 function labelStartDy(node: { readonly displayLines: readonly string[] }): number {
   return node.displayLines.length > 1 ? -7 : 0;
+}
+
+function nodeClassName(node: BehaviorMapNode & { readonly shape: string; readonly expanded: boolean }, selectedEntity: PathDerivedEntitySelection, hoveredNodeId: string | undefined, neighborsByNode: ReadonlyMap<string, ReadonlySet<string>>, childrenByNode: ReadonlyMap<string, ReadonlySet<string>>): string {
+  const isHovered = hoveredNodeId === node.id;
+  const isNeighbor = Boolean(hoveredNodeId && neighborsByNode.get(hoveredNodeId)?.has(node.id));
+  const isChild = Boolean(hoveredNodeId && childrenByNode.get(hoveredNodeId)?.has(node.id));
+  const isDimmed = Boolean(hoveredNodeId && !isHovered && !isNeighbor);
+  return [
+    'behavior-map-node',
+    `behavior-map-node--${node.kind}`,
+    `behavior-map-node--${node.shape}`,
+    node.expanded ? 'behavior-map-node--expanded' : undefined,
+    node.workflowSubtype ? `behavior-map-node--${node.workflowSubtype}` : undefined,
+    isSelected(node, selectedEntity) ? 'behavior-map-node--selected' : undefined,
+    isHovered ? 'behavior-map-node--hovered' : undefined,
+    isNeighbor ? 'behavior-map-node--neighbor' : undefined,
+    isChild ? 'behavior-map-node--child' : undefined,
+    isDimmed ? 'behavior-map-node--dimmed' : undefined,
+  ].filter(Boolean).join(' ');
+}
+
+function edgeClassName(edge: BehaviorMapLayoutEdge, hoveredNodeId: string | undefined, edgeIdsByNode: ReadonlyMap<string, ReadonlySet<string>>): string {
+  const isConnected = Boolean(hoveredNodeId && edgeIdsByNode.get(hoveredNodeId)?.has(edge.id));
+  return ['behavior-map-edge', `behavior-map-edge--${edge.kind}`, isConnected ? 'behavior-map-edge--highlighted' : undefined, hoveredNodeId && !isConnected ? 'behavior-map-edge--dimmed' : undefined].filter(Boolean).join(' ');
+}
+
+function tooltipPosition(clientX: number, clientY: number) {
+  const width = 260;
+  const height = 132;
+  return { x: Math.min(window.innerWidth - width - 12, clientX + 16), y: Math.min(window.innerHeight - height - 12, clientY + 16) };
+}
+
+function formatKind(kind: string): string {
+  return kind.replace(/-/g, ' ');
+}
+
+function tooltipSummary(node: BehaviorMapNode, childrenByNode: ReadonlyMap<string, ReadonlySet<string>>): string {
+  const childCount = childrenByNode.get(node.id)?.size ?? 0;
+  if (node.kind === 'semantic-area') return `${node.sizeWeight} workflows${node.diagnostics ? diagnosticSummary(node.diagnostics) : ''}`;
+  if (node.kind === 'workflow' || node.kind === 'aggregated-workflow') return `${childCount} visible related items${node.workflowSubtype === 'aggregated' ? ' · aggregate' : ''}`;
+  if (node.kind === 'capability') return `${childCount} visible uses/requires`;
+  return childCount > 0 ? `${childCount} visible references` : 'No expanded references visible';
+}
+
+function diagnosticSummary(diagnostics: NonNullable<BehaviorMapNode['diagnostics']>): string {
+  return ` · ${diagnostics.errors} errors · ${diagnostics.warnings} warnings`;
 }

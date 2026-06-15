@@ -11,8 +11,10 @@ export type WorkflowVisualSubtype = 'regular' | 'aggregated';
 
 export type BehaviorMapNode = {
   id: string;
+  canonicalId: string;
   ref: string;
   kind: BehaviorMapNodeKind;
+  visualParentId?: string;
   label: string;
   sizeWeight: number;
   workflowSubtype?: WorkflowVisualSubtype;
@@ -99,7 +101,7 @@ export function createBehaviorMapGraph(input: CreateBehaviorMapGraphInput): Beha
     const expandedWorkflows = [...nodes.values()].filter(
       (node) =>
         (node.kind === 'workflow' || node.kind === 'aggregated-workflow') &&
-        input.expansion?.expandedNodeIds.has(node.id) &&
+        input.expansion?.expandedNodeIds.has(node.canonicalId) &&
         !processedExpandedWorkflows.has(node.id),
     );
     for (const node of expandedWorkflows) {
@@ -136,7 +138,7 @@ export function createBehaviorMapGraph(input: CreateBehaviorMapGraphInput): Beha
     }
   }
 
-  return { nodes: [...nodes.values()].sort(compareNodes), edges: [...edges.values()].sort(compareEdges) };
+  return duplicateSharedWorkflowVisualNodes({ nodes: [...nodes.values()], edges: [...edges.values()] });
 }
 
 export function toBehaviorMapNodeId(kind: BehaviorMapNodeKind, scope: string, identity: string): string {
@@ -201,7 +203,8 @@ function isAggregateWorkflowField(fieldPath: string): boolean {
 }
 
 function createManifestNode(manifestId: string): BehaviorMapNode {
-  return { id: `manifest:${manifestId}`, ref: `manifest/${manifestId}`, kind: 'manifest', label: manifestId, sizeWeight: 1 };
+  const id = `manifest:${manifestId}`;
+  return { id, canonicalId: id, ref: `manifest/${manifestId}`, kind: 'manifest', label: manifestId, sizeWeight: 1 };
 }
 
 function createNode(
@@ -213,6 +216,7 @@ function createNode(
   const ref = toRef(entity.scope, entity.identity);
   return {
     id: toNodeId(kind, entity),
+    canonicalId: toNodeId(kind, entity),
     ref,
     kind,
     label: entity.displayName,
@@ -232,6 +236,58 @@ function addNode(nodes: Map<string, BehaviorMapNode>, node: BehaviorMapNode) {
 function addEdgeByNodeIds(edges: Map<string, BehaviorMapEdge>, source: string, target: string, kind: BehaviorMapEdgeKind, sourceField: string) {
   const edge = { id: `${kind}:${source}->${target}:${sourceField}`, source, target, kind, explicit: true as const, sourceField };
   edges.set(edge.id, edge);
+}
+
+function duplicateSharedWorkflowVisualNodes(graph: BehaviorMapGraph): BehaviorMapGraph {
+  const incomingByTarget = new Map<string, BehaviorMapEdge[]>();
+  for (const edge of graph.edges) incomingByTarget.set(edge.target, [...(incomingByTarget.get(edge.target) ?? []), edge]);
+
+  const duplicateParentsByCanonicalId = new Map<string, string[]>();
+  for (const node of graph.nodes) {
+    if (node.kind !== 'workflow' && node.kind !== 'aggregated-workflow') continue;
+    const visualParentIds = uniqueSorted((incomingByTarget.get(node.id) ?? []).map((edge) => edge.source));
+    if (visualParentIds.length > 1) duplicateParentsByCanonicalId.set(node.id, visualParentIds);
+  }
+
+  if (duplicateParentsByCanonicalId.size === 0) {
+    return { nodes: [...graph.nodes].sort(compareNodes), edges: [...graph.edges].sort(compareEdges) };
+  }
+
+  const visualNodeId = (canonicalId: string, visualParentId: string) => `${canonicalId}@@parent:${visualParentId}`;
+  const nodes = new Map<string, BehaviorMapNode>();
+  for (const node of graph.nodes) {
+    const duplicateParents = duplicateParentsByCanonicalId.get(node.id);
+    if (!duplicateParents) {
+      nodes.set(node.id, node);
+      continue;
+    }
+    for (const visualParentId of duplicateParents) {
+      const id = visualNodeId(node.id, visualParentId);
+      nodes.set(id, { ...node, id, canonicalId: node.id, visualParentId });
+    }
+  }
+
+  const edges = new Map<string, BehaviorMapEdge>();
+  for (const edge of graph.edges) {
+    const sourceDuplicates = duplicateParentsByCanonicalId.get(edge.source);
+    const targetDuplicates = duplicateParentsByCanonicalId.get(edge.target);
+    const sourceIds = sourceDuplicates ? sourceDuplicates.map((parentId) => visualNodeId(edge.source, parentId)) : [edge.source];
+
+    for (const source of sourceIds) {
+      for (const target of targetDuplicates ? targetIdsForSource(edge.target, targetDuplicates, edge.source, source, visualNodeId) : [edge.target]) {
+        addEdgeByNodeIds(edges, source, target, edge.kind, edge.sourceField);
+      }
+    }
+  }
+
+  return { nodes: [...nodes.values()].sort(compareNodes), edges: [...edges.values()].sort(compareEdges) };
+}
+
+function targetIdsForSource(canonicalTargetId: string, targetParents: readonly string[], canonicalSourceId: string, visualSourceId: string, visualNodeId: (canonicalId: string, visualParentId: string) => string): readonly string[] {
+  if (targetParents.includes(canonicalSourceId)) return [visualNodeId(canonicalTargetId, canonicalSourceId)];
+  const parsedParent = visualSourceId.includes('@@parent:') ? visualSourceId.slice(visualSourceId.indexOf('@@parent:') + '@@parent:'.length) : undefined;
+  if (parsedParent && targetParents.includes(parsedParent)) return [visualNodeId(canonicalTargetId, parsedParent)];
+  return [visualNodeId(canonicalTargetId, targetParents[0])];
 }
 
 function nodeKindForScope(scope: string): BehaviorMapNodeKind | undefined {
@@ -296,5 +352,5 @@ function summarizeDiagnostics(diagnostics: readonly DiagnosticViewModel[], entit
 }
 
 function uniqueSorted(values: readonly string[]) { return [...new Set(values)].sort((a, b) => a.localeCompare(b)); }
-function compareNodes(a: BehaviorMapNode, b: BehaviorMapNode) { return a.kind.localeCompare(b.kind) || a.ref.localeCompare(b.ref); }
+function compareNodes(a: BehaviorMapNode, b: BehaviorMapNode) { return a.kind.localeCompare(b.kind) || a.ref.localeCompare(b.ref) || a.id.localeCompare(b.id); }
 function compareEdges(a: BehaviorMapEdge, b: BehaviorMapEdge) { return a.id.localeCompare(b.id); }

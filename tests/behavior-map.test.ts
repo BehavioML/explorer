@@ -86,6 +86,31 @@ test('shared child uses one deterministic primary placement without being moved 
   assert.notDeepEqual([capability.x, capability.y], [verify.x, verify.y]);
 });
 
+test('shared workflows are visually duplicated per parent while preserving canonical identity', () => {
+  const graph = createBehaviorMapGraph({
+    entityIndex: createPathDerivedEntityIndex(files),
+    referenceIndex: {
+      ...referenceIndex,
+      outgoingReferences: [
+        ...referenceIndex.outgoingReferences,
+        ref('workflows', 'customer/onboard', 'steps[3].workflow', 'workflows', 'customer/verify'),
+      ],
+    },
+    expansion: { expandedNodeIds: expanded },
+  });
+  const canonicalVerifyId = toBehaviorMapNodeId('workflow', 'workflows', 'customer/verify');
+  const visualVerifyNodes = graph.nodes.filter((node) => node.canonicalId === canonicalVerifyId);
+
+  assert.equal(visualVerifyNodes.length, 2);
+  assert.ok(visualVerifyNodes.every((node) => node.id !== canonicalVerifyId));
+  assert.deepEqual(visualVerifyNodes.map((node) => node.visualParentId).sort(), [
+    toBehaviorMapNodeId('aggregated-workflow', 'workflows', 'customer/onboard'),
+    toBehaviorMapNodeId('semantic-area', 'semantic-areas', 'customer'),
+  ]);
+  assert.ok(graph.edges.some((edge) => edge.kind === 'aggregated-workflow-contains-workflow' && edge.target === `${canonicalVerifyId}@@parent:${toBehaviorMapNodeId('aggregated-workflow', 'workflows', 'customer/onboard')}`));
+  assert.deepEqual(validateBehaviorMapGraph(graph), []);
+});
+
 function assertDistinctSiblingPositions(nodes: readonly BehaviorMapLayoutNode[], childIds: readonly string[]) {
   const positions = childIds.map((id) => {
     const node = nodes.find((candidate) => candidate.id === id);

@@ -296,7 +296,7 @@ function wrapText(value: string, maxLength: number, maxLines: number): readonly 
   return clipped;
 }
 
-function edgeEndpoints(source: BehaviorMapLayoutNode, target: BehaviorMapLayoutNode) {
+export function edgeEndpoints(source: BehaviorMapLayoutNode, target: BehaviorMapLayoutNode) {
   const dx = target.x - source.x;
   const dy = target.y - source.y;
   const distance = Math.hypot(dx, dy) || 1;
